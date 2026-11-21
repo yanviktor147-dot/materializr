@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -42,8 +45,17 @@ jobs:
       - name: Build APK
         run: cd android && ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: materializr-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
+
+      - name: Publish to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Materializr debug build ${{ github.run_number }}"
+          files: android/app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
