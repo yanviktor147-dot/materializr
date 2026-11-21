@@ -149,9 +149,7 @@ void BoxSelect::render(float viewportWidth, float viewportHeight) {
             bl.x, bl.y,  tr.x, tr.y,  tl.x, tl.y,
         };
         glBufferData(GL_ARRAY_BUFFER, sizeof(fillVerts), fillVerts, GL_DYNAMIC_DRAW);
-        // Blue = window (fully enclosed), green = crossing (touched).
-        if (isWindow()) glUniform4f(m_locColor, 0.3f, 0.5f, 1.0f, 0.1f);
-        else            glUniform4f(m_locColor, 0.3f, 0.8f, 0.4f, 0.1f);
+        glUniform4f(m_locColor, 0.3f, 0.5f, 1.0f, 0.1f);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
@@ -164,8 +162,7 @@ void BoxSelect::render(float viewportWidth, float viewportHeight) {
             tl.x, tl.y,
         };
         glBufferData(GL_ARRAY_BUFFER, sizeof(outlineVerts), outlineVerts, GL_DYNAMIC_DRAW);
-        if (isWindow()) glUniform4f(m_locColor, 0.3f, 0.5f, 1.0f, 0.8f);
-        else            glUniform4f(m_locColor, 0.3f, 0.8f, 0.4f, 0.8f);
+        glUniform4f(m_locColor, 0.3f, 0.5f, 1.0f, 0.8f);
         glLineWidth(1.5f);
         glDrawArrays(GL_LINE_LOOP, 0, 4);
     }

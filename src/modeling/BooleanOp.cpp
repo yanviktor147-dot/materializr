@@ -1,6 +1,5 @@
 #include "BooleanOp.h"
 #include "../core/UiKeepAlive.h"
-#include "../core/OpProgress.h"
 #include <Message_ProgressIndicator.hxx>
 #include <Message_ProgressScope.hxx>
 #include <TopTools_ListOfShape.hxx>
@@ -127,31 +126,20 @@ bool BooleanOp::execute(Document& doc) {
         //     break. An attempt that cannot finish inside the budget is
         //     abandoned and the ladder moves on, so the worst case is bounded
         //     and the op fails cleanly instead of hanging forever.
-        // The 45 s budget and the UI keep-alive, on top of OpProgressBridge so a
-        // boolean run behind the progress window (BooleanPlugin) also gets a live
-        // bar and a Cancel that lands inside the kernel call. With no reporter the
-        // bridge reports nothing and this is the keep-alive and time box alone.
-        struct TimeBox : public materializr::OpProgressBridge {
-            DEFINE_STANDARD_RTTI_INLINE(TimeBox, materializr::OpProgressBridge)
+        struct TimeBox : public Message_ProgressIndicator {
             std::clock_t start; double limit;
-            TimeBox(double seconds, std::function<bool(float, const char*)> sink,
-                    const char* label)
-                : materializr::OpProgressBridge(std::move(sink), label),
-                  start(std::clock()), limit(seconds) {}
+            explicit TimeBox(double seconds)
+                : start(std::clock()), limit(seconds) {}
             Standard_Boolean UserBreak() override {
                 // Also the UI's only breathing room during a long Build() --
                 // see the matching note in ExtrudeOp's ExtrudeTimeBox.
                 materializr::uiKeepAlive();
-                return materializr::OpProgressBridge::UserBreak() ||
-                       double(std::clock() - start) / CLOCKS_PER_SEC > limit;
+                return double(std::clock() - start) / CLOCKS_PER_SEC > limit;
             }
-        protected:
-            void Show(const Message_ProgressScope& s, const Standard_Boolean f) override {
-                materializr::OpProgressBridge::Show(s, f);
+            void Show(const Message_ProgressScope&, const Standard_Boolean) override {
                 materializr::uiKeepAlive();
             }
         };
-        bool userCancelled = false;   // Cancel on the progress window: stop, do not escalate
         constexpr double kAttemptSeconds = 45.0;
 
         auto attempt = [&](double fuzzy) -> TopoDS_Shape {
@@ -169,10 +157,8 @@ bool BooleanOp::execute(Document& doc) {
                         }
                         op.SetRunParallel(Standard_True);
                         if (fuzzy > 0) op.SetFuzzyValue(fuzzy);
-                        Handle(TimeBox) tb = new TimeBox(kAttemptSeconds, progressReporter(),
-                                                         materializr::tr("Boolean"));
+                        Handle(TimeBox) tb = new TimeBox(kAttemptSeconds);
                         op.Build(tb->Start());
-                        if (tb->cancelled()) { userCancelled = true; return TopoDS_Shape(); }
                         if (tb->UserBreak())
                             std::fprintf(stderr, "[Boolean] attempt (fuzzy=%.4g) "
                                          "abandoned after %.0f s.\n", fuzzy, kAttemptSeconds);
@@ -197,10 +183,8 @@ bool BooleanOp::execute(Document& doc) {
                         }
                         op.SetRunParallel(Standard_True);
                         if (fuzzy > 0) op.SetFuzzyValue(fuzzy);
-                        Handle(TimeBox) tb = new TimeBox(kAttemptSeconds, progressReporter(),
-                                                         materializr::tr("Boolean"));
+                        Handle(TimeBox) tb = new TimeBox(kAttemptSeconds);
                         op.Build(tb->Start());
-                        if (tb->cancelled()) { userCancelled = true; return TopoDS_Shape(); }
                         if (tb->UserBreak())
                             std::fprintf(stderr, "[Boolean] attempt (fuzzy=%.4g) "
                                          "abandoned after %.0f s.\n", fuzzy, kAttemptSeconds);
@@ -227,10 +211,8 @@ bool BooleanOp::execute(Document& doc) {
                         }
                         op.SetRunParallel(Standard_True);
                         if (fuzzy > 0) op.SetFuzzyValue(fuzzy);
-                        Handle(TimeBox) tb = new TimeBox(kAttemptSeconds, progressReporter(),
-                                                         materializr::tr("Boolean"));
+                        Handle(TimeBox) tb = new TimeBox(kAttemptSeconds);
                         op.Build(tb->Start());
-                        if (tb->cancelled()) { userCancelled = true; return TopoDS_Shape(); }
                         if (tb->UserBreak())
                             std::fprintf(stderr, "[Boolean] attempt (fuzzy=%.4g) "
                                          "abandoned after %.0f s.\n", fuzzy, kAttemptSeconds);
@@ -295,7 +277,6 @@ bool BooleanOp::execute(Document& doc) {
         };
 
         TopoDS_Shape resultShape = attempt(0.0);
-        if (userCancelled) return false;   // a clean no-op: nothing was changed
         if (resultShape.IsNull()) {
             // Exact booleans fail on near-coincident / overlapping faces (a body
             // sitting flush on another, a thin sliver of overlap). A TINY fuzzy
@@ -304,7 +285,6 @@ bool BooleanOp::execute(Document& doc) {
             // together and visibly distort the model.
             for (double f : {1e-5, 1e-4, 1e-3}) {
                 resultShape = attempt(f);
-                if (userCancelled) return false;
                 if (!resultShape.IsNull()) {
                     std::fprintf(stderr, "[Boolean] %s succeeded with fuzzy=%.4g "
                                  "(target=%d tool=%d)\n",

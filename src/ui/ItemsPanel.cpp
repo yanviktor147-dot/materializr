@@ -8,7 +8,6 @@
 #include "../core/History.h"
 #include "../core/SelectionManager.h"
 #include "../modeling/DeleteOp.h"
-#include "../modeling/DeleteConstructionOp.h"
 #include "../modeling/SeparateBodyOp.h"
 #include <imgui.h>
 #include <cfloat>
@@ -68,7 +67,7 @@ void ItemsPanel::dropBodiesOn(int targetFolderId, int beforeBodyId) {
 
 void ItemsPanel::applyRowClick(const SelectionEntry& entry) {
     if (!m_selection) return;
-    if (ImGui::GetIO().KeyCtrl || m_multiArmed) m_selection->toggleSelection(entry);
+    if (ImGui::GetIO().KeyCtrl) m_selection->toggleSelection(entry);
     else                        m_selection->select(entry);
 }
 
@@ -429,11 +428,7 @@ bool ItemsPanel::renderContent() {
                     ImGui::SetScrollHereY(0.5f);
                 }
                 if (ImGui::Selectable(name.c_str(), isSelected)) {
-                    // The sketch being drawn is not a selectable item: the row
-                    // fires on RELEASE, after a double-click has already opened
-                    // the sketch, and selecting it then left the whole sketch
-                    // selected inside its own edit session.
-                    if (m_selection && !(m_sketchModeActive && id == m_activeSketchId)) {
+                    if (m_selection) {
                         SelectionEntry entry;
                         entry.type = SelectionType::Sketch;
                         entry.sketchId = id;
@@ -441,15 +436,8 @@ bool ItemsPanel::renderContent() {
                     }
                 }
 
-                // Double-click OPENS the sketch for editing, as it does in other
-                // CAD packages; rename lives in the context menu. The sketch
-                // already being drawn can't be re-entered mid-edit, so there
-                // the double-click still renames (#158).
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                    if (m_editSketch && !(m_sketchModeActive && id == m_activeSketchId))
-                        m_editSketch(id);
-                    else
-                        beginRename();
+                    beginRename();
                 }
 
                 if (ImGui::BeginPopupContextItem("SketchContextMenu")) {
@@ -630,17 +618,6 @@ bool ItemsPanel::renderContent() {
                     if (ImGui::MenuItem(materializr::tr("Rename"))) {
                         beginRename();
                     }
-                    if (ImGui::MenuItem(materializr::tr("Move..."))) {
-                        // Select it (the gizmo follows the selection), then let
-                        // the host arm Move exactly as the toolbar's Move does.
-                        if (m_selection) {
-                            SelectionEntry entry;
-                            entry.type = SelectionType::Plane;
-                            entry.planeId = id;
-                            m_selection->select(entry);
-                        }
-                        if (m_movePlane) m_movePlane(id);
-                    }
                     if (ImGui::MenuItem(materializr::tr("Flip Normal"))) {
                         m_document->flipPlaneNormal(id);
                         if (m_markDirty) m_markDirty();
@@ -649,7 +626,7 @@ bool ItemsPanel::renderContent() {
                         if (m_rotatePlane) m_rotatePlane(id);
                     }
                     if (ImGui::MenuItem(materializr::tr("Delete"))) {
-                        deleteConstructionEntity(m_history, *m_document, false, id);
+                        m_document->removePlane(id);
                         if (m_selection) m_selection->clear();
                         m_renamingId = -1;
                         ImGui::EndPopup();
@@ -737,7 +714,7 @@ bool ItemsPanel::renderContent() {
                         if (m_markDirty) m_markDirty();
                     }
                     if (ImGui::MenuItem(materializr::tr("Delete"))) {
-                        deleteConstructionEntity(m_history, *m_document, true, id);
+                        m_document->removeAxis(id);
                         if (m_selection) m_selection->clear();
                         m_renamingId = -1;
                         ImGui::EndPopup();
@@ -896,7 +873,7 @@ bool ItemsPanel::renderBodyRow(int id, int folderId) {
                         m_selection->addToSelection(makeEntry(displayOrder[i]));
                     m_selection->setNavigationOnly(true);
                 }
-            } else if (io.KeyCtrl || m_multiArmed) {
+            } else if (io.KeyCtrl) {
                 // Toggle this body in/out of the selection without disturbing
                 // the others. Keeps the anchor where it was.
                 m_selection->toggleSelection(makeEntry(id));

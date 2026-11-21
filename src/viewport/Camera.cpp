@@ -219,7 +219,7 @@ void Camera::zoom(float delta)
         // Multiplicative step keeps the feel consistent across scales.
         float factor = 1.0f - delta * s;
         factor = glm::clamp(factor, 0.1f, 10.0f);
-        m_orthoSize = std::clamp(m_orthoSize * factor, kMinOrthoSize, kMaxOrthoSize);
+        m_orthoSize = std::max(0.01f, m_orthoSize * factor);
         return;
     }
 
@@ -231,7 +231,7 @@ void Camera::zoom(float delta)
 
     // Prevent zooming through the target
     float newDistance = distance - zoomAmount;
-    newDistance = std::clamp(newDistance, 0.1f, kMaxPerspectiveDistance);
+    newDistance = std::max(newDistance, 0.1f);
 
     m_position = m_target + glm::normalize(direction) * newDistance;
 }
@@ -248,21 +248,11 @@ void Camera::zoomToward(const glm::vec3& focus, float delta)
     float factor = 1.0f - delta * m_zoomSpeed * m_mouseSensitivity;
     factor = glm::clamp(factor, 0.1f, 10.0f);
     if (m_orthographic) {
-        // In ortho, the view extent scales AND the camera slides toward the
-        // focus - otherwise the focus would shift on screen as we narrow the
-        // frustum. The slide is a pure TRANSLATION of camera and target: the
-        // image only depends on the lateral part, and scaling the camera-to-
-        // target distance too (as the perspective maths does) collapses it to
-        // nothing under repeated zoom-in - the near plane (which tracks the
-        // ortho size) then clips the whole scene, and once the distance
-        // reaches zero the view matrix is NaN and zooming back out cannot
-        // recover it.
-        if (factor < 1.0f && m_orthoSize * factor < kMinOrthoSize) return;
-        if (factor > 1.0f && m_orthoSize * factor > kMaxOrthoSize) return;
-        m_orthoSize = std::max(kMinOrthoSize, m_orthoSize * factor);
-        const glm::vec3 slide = (focus - m_target) * (1.0f - factor);
-        m_position += slide;
-        m_target   += slide;
+        // In ortho, both the camera/target slide AND the view extent scale -
+        // otherwise the focus would shift on screen as we narrow the frustum.
+        m_orthoSize = std::max(0.01f, m_orthoSize * factor);
+        m_position  = focus + (m_position - focus) * factor;
+        m_target    = focus + (m_target   - focus) * factor;
         return;
     }
     glm::vec3 newPos    = focus + (m_position - focus) * factor;
@@ -271,11 +261,6 @@ void Camera::zoomToward(const glm::vec3& focus, float delta)
     // least 0.1 mm of standoff so the view doesn't degenerate.
     if (glm::length(newPos - newTarget) < 0.1f) return;
     if (glm::length(newPos - focus)     < 0.1f) return;
-    // ...and not so far that the view comes apart (see kMaxPerspectiveDistance). Moving
-    // out is refused past it; moving back in is always allowed.
-    if (factor > 1.0f &&
-        (glm::length(newPos - newTarget) > kMaxPerspectiveDistance ||
-         glm::length(newPos - focus) > kMaxPerspectiveDistance)) return;
     m_position = newPos;
     m_target   = newTarget;
 }
@@ -348,25 +333,6 @@ void Camera::zoomToFit(glm::vec3 min, glm::vec3 max)
     float halfFov = glm::radians(m_fov) * 0.5f;
     float distance = radius / std::sin(halfFov);
     m_position = center + direction * distance;
-}
-
-void Camera::animateToFit(glm::vec3 min, glm::vec3 max, float seconds)
-{
-    finishAnimation();
-    finishBlend();
-    const glm::vec3 center = (min + max) * 0.5f;
-    const float radius = glm::length(max - min) * 0.5f;
-    const glm::vec3 direction = glm::normalize(m_position - m_target);
-
-    // Same destination zoomToFit would land on.
-    if (m_orthographic) {
-        const float orthoSize = std::max(radius * 1.1f, 0.01f);
-        const float dist = std::max(glm::length(m_position - m_target), radius * 2.0f);
-        animateTo(center + direction * dist, center, m_up, true, orthoSize, seconds);
-        return;
-    }
-    const float distance = radius / std::sin(glm::radians(m_fov) * 0.5f);
-    animateTo(center + direction * distance, center, m_up, false, m_orthoSize, seconds);
 }
 
 void Camera::setPosition(glm::vec3 pos)

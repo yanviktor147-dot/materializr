@@ -28,7 +28,7 @@ android {
     // page alignment (required by Play for Android 15+). r26's prebuilt STL was
     // 4 KB. OCCT is still cross-built with r26 (its .so are 16 KB via the linker
     // flag in setup-deps.sh) and links fine against the r28-built app + STL.
-    ndkVersion '28.2.13676358'
+    ndkVersion '26.3.11579264'
 
     defaultConfig {
         // Published package name. The public/open-source default is
@@ -52,8 +52,8 @@ android {
                                                          : 'arm64-v8a'
         def allAbi    = project.hasProperty('allAbi')
         def abiList   = allAbi ? ['arm64-v8a', 'x86_64'] : [targetAbi]
-        versionCode 56
-        def vName = '1.8.0-beta.6'
+        versionCode 53
+        def vName = '1.7.7'
         versionName vName
 
         externalNativeBuild {

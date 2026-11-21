@@ -23,8 +23,6 @@
 #include <gp_Dir2d.hxx>
 #include <gp_Vec2d.hxx>
 #include <gp_Ax3.hxx>
-#include <gp_Ax2.hxx>
-#include <gp_Trsf.hxx>
 #include <algorithm>
 #include <vector>
 #include <cmath>
@@ -140,7 +138,7 @@ TopoDS_Face singleWireFace(const Handle(Geom_Surface)& surf, TopoDS_Wire w) {
 TopoDS_Wire wrapWireOnCylinder(const TopoDS_Wire& w,
                                const Handle(Geom_CylindricalSurface)& cyl,
                                const gp_Pnt& O, const gp_Dir& sketchX,
-                               const gp_Dir& sketchY, double uO) {
+                               double uO) {
     const gp_Ax3& ax = cyl->Position();
     const gp_Pnt P = ax.Location();
     const gp_Dir Z = ax.Direction();
@@ -164,31 +162,15 @@ TopoDS_Wire wrapWireOnCylinder(const TopoDS_Wire& w,
     } catch (...) { return TopoDS_Wire(); }
     if (pts.size() < 3) return TopoDS_Wire();
 
-    // Which way u must run along the sketch's X so the wrap reads the same from
-    // outside as the sketch does from its front (not mirrored). The wrap maps
-    // sketch (s, t) -> (u, h); from outside it keeps handedness when
-    // d(u)/d(s) and d(h)/d(t) have the same sign relative to the surface's own
-    // (u, v) frame. That frame is NOT a constant: it depends on whether the
-    // cylinder's axis points along or against the sketch's Y (a Cylinder
-    // primitive stands up, a revolved one may point either way) and on the
-    // handedness of its Ax3. A fixed sign mirrored the text on the first.
-    double uSign = -1.0;
-    {
-        const gp_Vec X(ax.XDirection()), Y(ax.YDirection());
-        const gp_Vec Tu = X.Multiplied(-std::sin(uO)) + Y.Multiplied(std::cos(uO));
-        const gp_Vec Rf = X.Multiplied(std::cos(uO)) + Y.Multiplied(std::sin(uO));
-        const double q = Tu.Crossed(gp_Vec(Z)).Dot(Rf) >= 0.0 ? 1.0 : -1.0;
-        const double eh = gp_Vec(Z).Dot(gp_Vec(sketchY)) >= 0.0 ? 1.0 : -1.0;
-        uSign = q * eh;
-    }
-
     // Map to (u, v): u = uO + horizontal/r (continuous), v = axial height.
     std::vector<gp_Pnt2d> uv;
     uv.reserve(pts.size() + 1);
     for (const auto& pt : pts) {
         double s = gp_Vec(O, pt).Dot(gp_Vec(sketchX));
         double h = gp_Vec(P, pt).Dot(gp_Vec(Z));
-        uv.emplace_back(uO + uSign * s / r, h);
+        // -s: the cylinder's u winds opposite the sketch's X, so without this the
+        // wrapped logo comes out mirrored.
+        uv.emplace_back(uO - s / r, h);
     }
     if (uv.front().Distance(uv.back()) > 1e-9) uv.push_back(uv.front());
 
@@ -268,11 +250,7 @@ bool ProjectSketchOp::execute(Document& doc) {
         m_depth < 0.01) {
         return false;
     }
-    // The cascade's pinned FINAL sketch when one is set: a history replay rolls
-    // the live sketch back to how it stood at this step, so reading it here
-    // stamped the projection from before the sketch's later edits and moves.
-    auto sketch = doc.cascadeSketchOverride(m_sketchId);
-    if (!sketch) sketch = doc.getSketch(m_sketchId);
+    auto sketch = doc.getSketch(m_sketchId);
     if (!sketch) {
         std::fprintf(stderr, "[ProjectSketch] sketch %d not found\n",
                      m_sketchId);
@@ -350,7 +328,6 @@ bool ProjectSketchOp::execute(Document& doc) {
         Handle(Geom_CylindricalSurface) cyl =
             Handle(Geom_CylindricalSurface)::DownCast(tsurf);
         const gp_Dir sketchX = pln.XAxis().Direction();
-        const gp_Dir sketchY = pln.YAxis().Direction();
         double uO = 0.0;
         if (!cyl.IsNull()) {
             const gp_Ax3& cax = cyl->Position();
@@ -360,52 +337,10 @@ bool ProjectSketchOp::execute(Document& doc) {
             double ny = -gp_Vec(dir).Dot(gp_Vec(cax.YDirection()));
             uO = std::atan2(ny, nx);
         }
-        // Mirrored: the whole selection is reflected about its own centre line
-        // (the plane through the middle of the chosen regions, normal to the
-        // sketch's X axis) before it is projected, so it lands where it was
-        // drawn but reads the other way round.
-        std::vector<int> wantedRegions;
-        for (size_t k = 0; k < m_regionFilter.size(); ++k) {
-            int idx = m_regionFilter[k];
-            if (k < m_regionAnchors.size()) {
-                const int byPoint = sketch->regionAtAnchor(regions, m_regionAnchors[k]);
-                if (byPoint >= 0) idx = byPoint;
-            }
-            wantedRegions.push_back(idx);
-        }
-        gp_Trsf mirrorTrsf;
-        if (m_mirror) {
-            double lo = 1e300, hi = -1e300;
-            for (size_t ri = 0; ri < regions.size(); ++ri) {
-                if (!wantedRegions.empty() &&
-                    std::find(wantedRegions.begin(), wantedRegions.end(),
-                              static_cast<int>(ri)) == wantedRegions.end())
-                    continue;
-                for (TopExp_Explorer ex(regions[ri].outerWire, TopAbs_EDGE); ex.More(); ex.Next()) {
-                    BRepAdaptor_Curve c(TopoDS::Edge(ex.Current()));
-                    const double a = c.FirstParameter(), b = c.LastParameter();
-                    for (int i = 0; i <= 16; ++i) {
-                        const double s = gp_Vec(org, c.Value(a + (b - a) * i / 16.0)).Dot(gp_Vec(sketchX));
-                        lo = std::min(lo, s); hi = std::max(hi, s);
-                    }
-                }
-            }
-            if (hi >= lo) {
-                const gp_Pnt centre = org.Translated(gp_Vec(sketchX) * (0.5 * (lo + hi)));
-                mirrorTrsf.SetMirror(gp_Ax2(centre, sketchX));
-            }
-        }
-        const bool doMirror = m_mirror && mirrorTrsf.Form() != gp_Identity;
-        auto projectWire = [&](const TopoDS_Wire& wir0) -> TopoDS_Wire {
-            TopoDS_Wire wir = wir0;
-            if (doMirror) {
-                try {
-                    wir = TopoDS::Wire(BRepBuilderAPI_Transform(wir0, mirrorTrsf, Standard_True).Shape());
-                } catch (...) { return TopoDS_Wire(); }
-            }
+        auto projectWire = [&](const TopoDS_Wire& wir) -> TopoDS_Wire {
             return cyl.IsNull()
                 ? projectNearest(wir, m_targetFace, dir, org)
-                : wrapWireOnCylinder(wir, cyl, org, sketchX, sketchY, uO);
+                : wrapWireOnCylinder(wir, cyl, org, sketchX, uO);
         };
 
         // One stamp tool per region: project outer + hole wires, rebuild as
@@ -418,6 +353,18 @@ bool ProjectSketchOp::execute(Document& doc) {
         double toolVolume = 0.0;
         int skipped = 0;
         reportProgress(0.0f, "Projecting sketch onto face\xE2\x80\xA6");
+        // Which regions the filter names. A saved point finds its region
+        // whatever the numbering did since; a point that lands in no region
+        // (the sketch was edited away from it) keeps its index.
+        std::vector<int> wantedRegions;
+        for (size_t k = 0; k < m_regionFilter.size(); ++k) {
+            int idx = m_regionFilter[k];
+            if (k < m_regionAnchors.size()) {
+                const int byPoint = sketch->regionAtAnchor(regions, m_regionAnchors[k]);
+                if (byPoint >= 0) idx = byPoint;
+            }
+            wantedRegions.push_back(idx);
+        }
         for (size_t ri = 0; ri < regions.size(); ++ri) {
             if (!m_regionFilter.empty()) {
                 bool wanted = false;
@@ -617,7 +564,6 @@ std::string ProjectSketchOp::serializeParams() const {
     std::snprintf(buf, sizeof(buf), "body=%d;sketch=%d;depth=%.6f;mode=%d",
                   m_bodyId, m_sketchId, m_depth, static_cast<int>(m_mode));
     blob += buf;
-    if (m_mirror) blob += ";mirror=1";
     if (!m_regionFilter.empty()) {
         blob += ";regions=";
         for (size_t i = 0; i < m_regionFilter.size(); ++i) {
@@ -679,7 +625,6 @@ bool ProjectSketchOp::deserializeParams(const std::string& blob) {
                                                  : Mode::Engrave;
             any = true;
         }
-        else if (key == "mirror") { m_mirror = std::atoi(val.c_str()) != 0; any = true; }
         else if (key == "regions") {
             m_regionFilter.clear();
             size_t p = 0;

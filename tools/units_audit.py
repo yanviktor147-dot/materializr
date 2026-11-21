@@ -25,8 +25,7 @@ CONTROLS = (r'InputFloat\(|InputDouble\(|InputScalar|SliderFloat\(|DragFloat\(|i
 # they are unit literals, and inventorying them is the point.
 LITERALS = r'(?<![A-Za-z0-9_])mm(?![A-Za-z0-9_])'
 SKIP_CTRL = ("src/ui/NumField.h", "src/ui/LengthField.h", "src/core/NumParse.h", "src/ui/TouchWidgets", "src/core/Units.h", "src/ui/StepperRow.h")
-SKIP_LIT  = ("src/core/Units.h", "src/core/LengthEdit.h", "src/ui/LengthField.h", "i18n_catalogue.h",
-            "i18n_zh_catalogue.h")
+SKIP_LIT  = ("src/core/Units.h", "src/core/LengthEdit.h", "src/ui/LengthField.h", "i18n_catalogue.h")
 
 # (file, fragment-of-line) -> dimension, for rows the line alone does not reveal.
 OVERRIDE = [
@@ -41,7 +40,6 @@ OVERRIDE = [
     ("src/app/FaceOpControllers.cpp", "sclBStep", "percent"),
     ("src/app/FaceOpControllers.cpp", "twistStep", "angle"),
     ("src/app/Application_Viewport.cpp", "##bubbleDia", "CONVERTED"),   # commits via parseLength below
-    ("src/app/Application_Dialogs.cpp", "edited = ImGui::InputDouble(label, &a", "angle"),  # shape-panel angle row (degrees)
     ("src/app/Application_Viewport.cpp", "parseFinite(m_sketchDimBuf", "angle"),  # sweep deg / polygon sides
     ("src/plugins/SketchPlugin.cpp", "parseFinite(m_dimBuf", "angle"),            # same non-length branch
     ("src/app/Application_Dialogs.cpp", "Slice position", "absolute-mm"),   # mesh-trace plane offset along its own normal: a genuine length, deliberately shown in mm

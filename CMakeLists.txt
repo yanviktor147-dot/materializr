@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
-project(Materializr VERSION 1.8.0 LANGUAGES CXX)
+project(Materializr VERSION 1.7.7 LANGUAGES CXX)
 
 # Pre-release suffix appended to the reported version (e.g. "-beta.1"). Empty on
 # stable releases. Kept here next to project() so a beta build self-identifies
 # as e.g. "1.3.0-beta.1" - that way the in-app update check (which is semver
 # pre-release aware) doesn't nag a beta tester to "update" to the build they're
 # already running, and hands off cleanly to the final 1.3.0.
-set(MATERIALIZR_VERSION_SUFFIX "-beta.6")
+set(MATERIALIZR_VERSION_SUFFIX "")
 
 # macOS: deliberately do NOT pin CMAKE_OSX_DEPLOYMENT_TARGET. The bundled Homebrew
 # OpenCASCADE/SDL3 dylibs are built for the build host's macOS, so they - not our
@@ -311,7 +311,6 @@ add_executable(materializr
     src/ai/AiSessionController.cpp
     src/ai/AiConnectionTest.cpp
     src/core/Base64.cpp
-    src/core/LogCapture.cpp
     src/core/Document.cpp
     src/core/History.cpp
     src/core/SelectionManager.cpp
@@ -328,7 +327,6 @@ add_executable(materializr
     src/modeling/CombineSketchesOp.cpp
     src/modeling/DuplicateSketchOp.cpp
     src/modeling/DeleteSketchOp.cpp
-    src/modeling/DeleteConstructionOp.cpp
     src/modeling/MoveHoleOp.cpp
     src/modeling/ReplayOp.cpp
     src/modeling/OperationFactory.cpp
@@ -386,7 +384,6 @@ add_executable(materializr
     src/modeling/MateSolver.cpp
     src/modeling/SketchTool.cpp
     src/modeling/SketchOffset.cpp
-    src/modeling/PlaneReferences.cpp
     src/modeling/SketchEditOp.cpp
     src/viewport/Viewport.cpp
     src/viewport/Camera.cpp
@@ -413,7 +410,6 @@ add_executable(materializr
     src/viewport/SelectionHighlight.cpp
     src/ui/Toolbar.cpp
     src/ui/TouchWidgets.cpp
-    src/ui/RailOrder.cpp
     src/ui/HistoryPanel.cpp
     src/ui/ItemsPanel.cpp
     src/ui/StatusBar.cpp
@@ -428,13 +424,11 @@ add_executable(materializr
     src/ui/ToastNotification.cpp
     src/ui/ShortcutsPanel.cpp
     src/ui/AboutDialog.cpp
-    src/ui/BugReportDialog.cpp
     src/ui/WelcomeScreen.cpp
     src/ui/LandingPage.cpp
     src/app/ProjectSession.cpp
     src/app/KeyBindings.cpp
     src/ui/UpdateChecker.cpp
-    src/core/ReportSender.cpp
     src/ui/HelpPanel.cpp
     src/io/ProjectIO.cpp
     src/io/ImageDecode.cpp
@@ -569,11 +563,6 @@ if(MSVC)
     # every test executable in tests/ added below - those hit the same OCCT
     # code paths and need the same fault-to-exception conversion.
     add_compile_options(/EHa)
-    # Source files hold raw UTF-8 (the Simplified Chinese catalogue and its
-    # language name). Without /utf-8 MSVC reads a BOM-less file in the system
-    # code page, which is wrong on a Chinese or Japanese Windows. Global for the
-    # same reason as /EHa: the tests include the same headers.
-    add_compile_options(/utf-8)
 endif()
 
 if(APPLE)

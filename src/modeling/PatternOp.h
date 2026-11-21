@@ -15,9 +15,6 @@ public:
 
     // Parameters
     void setBody(int id);
-    // Pattern SEVERAL source bodies in one step: each gets its own run of
-    // copies. The first id is also the "primary" one getBodyId() reports.
-    void setBodies(const std::vector<int>& ids);
     void setType(PatternType t);
     void setCount(int n);
     void setLinearSpacing(double x, double y, double z);
@@ -30,8 +27,6 @@ public:
 
     // Getters
     int getBodyId() const { return m_bodyId; }
-    // Every source body: the primary first, then any extras.
-    std::vector<int> getBodyIds() const;
     PatternType getType() const { return m_type; }
     int getCount() const { return m_count; }
     const std::vector<int>& getCreatedBodyIds() const { return m_createdBodyIds; }
@@ -50,7 +45,6 @@ public:
 
 private:
     int m_bodyId = -1;
-    std::vector<int> m_extraBodyIds;   // sources beyond the primary (multi-select)
     PatternType m_type = PatternType::Linear;
     int m_count = 3;
 

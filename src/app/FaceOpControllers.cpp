@@ -92,79 +92,18 @@ bool faceBordersRounded(const TopoDS_Shape& body, const TopoDS_Face& face) {
 
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
-namespace {
-// Selected faces that belong to `bodyId`, in selection order.
-std::vector<TopoDS_Face> selectedFacesOn(const IopContext& ctx, int bodyId) {
-    std::vector<TopoDS_Face> out;
-    for (const auto& e : ctx.selection.getSelection())
-        if (e.type == SelectionType::Face && e.bodyId == bodyId && !e.shape.IsNull())
-            out.push_back(TopoDS::Face(e.shape));
-    return out;
-}
-
-bool sameFaces(const std::vector<TopoDS_Face>& a, const std::vector<TopoDS_Face>& b) {
-    if (a.size() != b.size()) return false;
-    for (const auto& f : a) {
-        bool found = false;
-        for (const auto& g : b) if (f.IsSame(g)) { found = true; break; }
-        if (!found) return false;
-    }
-    return true;
-}
-} // namespace
-
 int ShellController::onBegin(const IopContext& ctx) {
-    // Faces win over a body: they name the openings. A body on its own starts
-    // the shell sealed, and faces clicked afterwards open it (syncOpenings).
-    int body = -1;
     for (const auto& e : ctx.selection.getSelection()) {
-        if (e.type == SelectionType::Face && e.bodyId >= 0 && !e.shape.IsNull()) {
-            body = e.bodyId;
-            break;
+        if (e.type == SelectionType::Face && e.bodyId >= 0 &&
+            !e.shape.IsNull()) {
+            m_face = TopoDS::Face(e.shape);
+            m_thickness = 1.0f;
+            materializr::formatLengthDigits(m_inputBuf, sizeof(m_inputBuf), m_thickness);
+            m_inputFocus = true;
+            return e.bodyId;
         }
     }
-    if (body < 0) {
-        for (const auto& e : ctx.selection.getSelection()) {
-            if (e.type == SelectionType::Body && e.bodyId >= 0) {
-                body = e.bodyId;
-                break;
-            }
-        }
-    }
-    if (body < 0) return -1;
-    m_faces = selectedFacesOn(ctx, body);
-    m_lastSel = m_faces;
-    m_openingsRev = 0;
-    m_thickness = 1.0f;
-    materializr::formatLengthDigits(m_inputBuf, sizeof(m_inputBuf), m_thickness);
-    m_inputFocus = true;
-    return body;
-}
-
-bool ShellController::syncOpenings(const IopContext& ctx) {
-    // Additive: a face that appears in the selection becomes an opening and
-    // stays one. The selection can't be the whole truth - an opened face is
-    // gone from the preview body, so it drops out of the selection (and can't
-    // be clicked again), which would otherwise close it on the next pick.
-    std::vector<TopoDS_Face> cur = selectedFacesOn(ctx, bodyId());
-    bool added = false;
-    for (const auto& f : cur) {
-        bool known = false;
-        for (const auto& g : m_lastSel) if (f.IsSame(g)) { known = true; break; }
-        if (known) continue;
-        // A face picked on the preview body isn't one of the snapshot's: hand
-        // the op the snapshot's own face, and skip one that is already open.
-        TopoDS_Face mine = ShellOp::matchFace(snapshot(), f);
-        if (mine.IsNull()) continue;
-        bool dup = false;
-        for (const auto& g : m_faces) if (g.IsSame(mine)) { dup = true; break; }
-        if (dup) continue;
-        m_faces.push_back(mine);
-        added = true;
-    }
-    m_lastSel = cur;
-    if (added) ++m_openingsRev;
-    return added;
+    return -1;
 }
 
 bool ShellController::wantsDeferredCommit(const IopContext& ctx) const {
@@ -176,32 +115,12 @@ std::unique_ptr<Operation> ShellController::buildOp(const IopContext&) {
     auto op = std::make_unique<ShellOp>();
     op->setBody(bodyId());
     op->setThickness(static_cast<double>(m_thickness));
-    for (const auto& f : m_faces) op->addFaceToRemove(f);
+    op->addFaceToRemove(m_face);
     return op;
 }
 
 void ShellController::panelBody(const IopContext& ctx, bool& changed) {
-    if (syncOpenings(ctx)) changed = true;
-
-    if (m_faces.empty()) {
-        ImGui::TextWrapped("%s", materializr::tr("Sealed hollow. Click faces to open them."));
-    } else {
-        ImGui::Text(materializr::tr("Open faces: %d selected"), static_cast<int>(m_faces.size()));
-        ImGui::SameLine();
-        if (ImGui::SmallButton(materializr::tr("Clear"))) {
-            // Deselect them too, or clicking the same face again would be no
-            // change and couldn't reopen it.
-            std::vector<SelectionEntry> drop;
-            for (const auto& e : ctx.selection.getSelection())
-                if (e.type == SelectionType::Face && e.bodyId == bodyId())
-                    drop.push_back(e);
-            for (const auto& e : drop) ctx.selection.removeFromSelection(e);
-            m_faces.clear();
-            m_lastSel.clear();
-            ++m_openingsRev;
-            changed = true;
-        }
-    }
+    ImGui::TextDisabled("%s", materializr::tr("Hollows the body, opening a face."));
 
     if (ctx.cornerCommitUi) {
         // im-touch: number-pad amount field - no InputText, no native
@@ -220,7 +139,7 @@ void ShellController::panelBody(const IopContext& ctx, bool& changed) {
     // than feeding inf into MakeThickSolid.
     // The member is the truth; the buffer follows it unless being typed in.
     materializr::reseedLengthBufferIfIdle("##shellThickness", m_inputBuf, sizeof(m_inputBuf), m_thickness);
-    if (materializr::lengthNumberText("##shellThickness", m_inputBuf, sizeof(m_inputBuf),
+    if (materializr::inputNumberText("##shellThickness", m_inputBuf, sizeof(m_inputBuf),
                          ImGuiInputTextFlags_EnterReturnsTrue)) {
         (void)materializr::parseLength(m_inputBuf, m_thickness);
         requestCommit();
@@ -239,10 +158,8 @@ void ShellController::panelBody(const IopContext& ctx, bool& changed) {
     ImGui::Text("%s", materializr::unitSuffix());
     }
 
-    // allowNegative: the -10 / -1 / -0.1 buttons step the wall DOWN (the range
-    // still stops them at the 0.1 mm floor - a wall is never negative).
     if (materializr::lengthStepperRow("shellStep", &m_thickness,
-                                /*allowNegative=*/true, 0.1f, 20.0f)) {
+                                /*allowNegative=*/false, 0.1f, 20.0f)) {
         // Snap to 0.1 mm - wall thicknesses are almost always in tenths, and a
         // free-floating 3.47 mm slider value is just noise.
         m_thickness = std::round(m_thickness * 10.0f) / 10.0f;
@@ -260,11 +177,8 @@ void ShellController::panelBody(const IopContext& ctx, bool& changed) {
         // open a fillet-bordered face (it seals the cavity), and no thickness
         // fixes it; the answer is order-of-operations: shell first, fillet after.
         // A plain side face that failed for another reason gets the generic hint.
-        const TopoDS_Shape& body = snapshot();
-        bool bordersRounded = false;
-        for (const auto& f : m_faces)
-            if (faceBordersRounded(body, f)) { bordersRounded = true; break; }
-        if (bordersRounded) {
+        const TopoDS_Shape& body = ctx.doc.getBody(bodyId());
+        if (faceBordersRounded(body, m_face)) {
             ImGui::TextColored(warn, "%s", materializr::tr("Shell failed: OCCT can't open a fillet-bordered face.\nShell the body FIRST, then add the fillets."));
         } else {
             ImGui::TextColored(warn, "%s", materializr::tr("Shell failed - try a thinner wall, or\nthis body's faces can't be shelled."));
@@ -273,8 +187,7 @@ void ShellController::panelBody(const IopContext& ctx, bool& changed) {
 }
 
 void ShellController::onCleanup() {
-    m_faces.clear();
-    m_lastSel.clear();
+    m_face.Nullify();
 }
 
 // ─── Taper ───────────────────────────────────────────────────────────────────
@@ -557,7 +470,6 @@ std::unique_ptr<Operation> ProjectSketchController::buildOp(
     op->setDepth(static_cast<double>(m_depth));
     op->setMode(m_mode == 1 ? ProjectSketchOp::Mode::Emboss
                             : ProjectSketchOp::Mode::Engrave);
-    op->setMirror(m_mirror);
     return op;
 }
 
@@ -700,20 +612,9 @@ void ProjectSketchController::panelBody(const IopContext& ctx,
     ImGui::SameLine();
     if (ImGui::RadioButton(materializr::tr("Emboss"), &m_mode, 1)) changed = true;
 
-    // Which way round the result reads. Depends on where the sketch sits
-    // relative to the body and which way you look at the face, so it is the
-    // user's call rather than a guess.
-    {
-        int dir = m_mirror ? 1 : 0;
-        if (ImGui::RadioButton(materializr::tr("As drawn"), &dir, 0)) changed = true;
-        ImGui::SameLine();
-        if (ImGui::RadioButton(materializr::tr("Mirrored"), &dir, 1)) changed = true;
-        m_mirror = dir == 1;
-    }
-
     ImGui::TextDisabled("%s", materializr::trFormat("Depth: %s", materializr::fmtLength(m_depth)).c_str());
     if (materializr::lengthStepperRow("projDepthStep", &m_depth,
-                                /*allowNegative=*/true, 0.1f, 10.0f)) {
+                                /*allowNegative=*/false, 0.1f, 10.0f)) {
         changed = true;
     }
     if (ctx.cornerCommitUi &&
@@ -994,13 +895,9 @@ void ScaleFaceController::panelBody(const IopContext& ctx, bool& changed) {
     ImGui::TextDisabled("%s", materializr::tr("Or drag the two arrows on the face."));
     ImGui::TextDisabled("%s", materializr::trFormat("Length: %s", materializr::fmtLength(m_len)).c_str());
     if (materializr::lengthStepperRow("lenStep", &m_len,
-                                /*allowNegative=*/true, 0.5f,
-                                std::max(m_lenMax, 1.0f))) {
-        // The stepper row has no ceiling; this length is physically bounded
-        // by the hole depth, so hold that one here.
-        m_len = std::min(m_len, std::max(m_lenMax, 1.0f));
+                                /*allowNegative=*/false, 0.5f,
+                                std::max(m_lenMax, 1.0f)))
         changed = true;
-    }
     if (ctx.cornerCommitUi &&
         materializr::amountLengthField("lenAmt", nullptr, &m_len, /*allowSign=*/false, 0.5f, std::max(m_lenMax, 1.0f)))
         changed = true;

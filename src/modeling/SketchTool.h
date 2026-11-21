@@ -17,7 +17,7 @@ namespace materializr {
 // (Application::setActiveSketchMode) and the sketch toolbar hardcodes those
 // indices, so inserting a mode in the middle silently highlights the wrong
 // button -- Dimension would become 13 while the button still tests 12.
-enum class SketchToolMode { None, Select, Line, Circle, Rectangle, Arc, Spline, Polygon, Trim, Text, Svg, Mirror, Dimension, Airfoil, Offset, Point, Fill, Reference, Corner };
+enum class SketchToolMode { None, Select, Line, Circle, Rectangle, Arc, Spline, Polygon, Trim, Text, Svg, Mirror, Dimension, Airfoil, Offset, Point, Fill };
 
 enum class DimEntityKind { None, Point, Line, Circle, Arc };
 struct DimPick { DimEntityKind kind = DimEntityKind::None; int id = -1; };
@@ -167,74 +167,7 @@ public:
     // popup without committing the placement, so the user can preview a new
     // count before clicking.
     int getPolygonSides() const { return m_polygonSides; }
-
-    // How the Polygon tool turns the cursor (and the panel) into a polygon.
-    // By default the size and the angle of vertex 0 follow the cursor, as they
-    // always did: the cursor is the circumscribed radius. The panel can read
-    // the size as a radius or a diameter, of the circle through the corners
-    // (circumscribed) or the one touching the sides (inscribed), and either
-    // value can be typed exactly instead of dragged.
-    struct PolygonSpec {
-        bool diameter = false;        // size is a diameter (else a radius)
-        bool inscribed = false;       // size is of the inscribed (side-touching) circle
-        bool hasSize = false;         // `size` was typed: it overrides the cursor
-        double size = 0.0;            //   in mm, in the sense above
-        bool hasAngle = false;        // `angleDeg` was typed: it overrides the cursor
-        double angleDeg = 0.0;        //   direction of vertex 0, degrees from sketch +X
-    };
-    PolygonSpec& polygonSpec() { return m_polygonSpec; }
-    const PolygonSpec& polygonSpec() const { return m_polygonSpec; }
-    // Circumscribed radius and vertex-0 angle (radians) for a cursor at `cursor`
-    // with the first click at `centre`, after the spec has had its say.
-    void polygonResolve(glm::vec2 centre, glm::vec2 cursor, float& circumRadius,
-                        float& rotationRad) const;
-    // The size as the spec reads it (radius or diameter, circum- or inscribed)
-    // for a circumscribed radius - what the panel shows while the size is
-    // still following the cursor.
-    double polygonSizeFor(double circumRadius) const;
-    // Place the polygon now, from the centre click and the current spec and
-    // cursor - the panel's Place button. False when nothing is being placed.
-    bool commitPolygonNow();
     void setPolygonSides(int n) { m_polygonSides = (n < 3) ? 3 : n; }
-
-    // Typed values for the Line / Circle / Rectangle / Arc panels - the same idea
-    // as PolygonSpec. Each field, once typed, overrides what the cursor would
-    // have said; the rest keeps following the cursor. Used for the preview and
-    // for the commit, so the two cannot disagree.
-    //   hasLen   Line length, Circle size (a radius, or a diameter when
-    //            circleDiameter()), Arc chord. mm.
-    //   hasAngle Line direction / Rectangle rotation, degrees from sketch +X.
-    //   hasW/H   Rectangle width (along the rotated X) and height.
-    //   hasApex  Arc: the sweep in degrees or the radius in mm, per ArcDimMode.
-    // The cursor still chooses the QUADRANT / SIDE: a size has no direction.
-    struct ShapeSpec {
-        bool hasLen = false;   double len = 0.0;
-        bool hasAngle = false; double angleDeg = 0.0;
-        bool hasW = false;     double w = 0.0;
-        bool hasH = false;     double h = 0.0;
-        bool hasApex = false;  double apex = 0.0;
-        bool any() const { return hasLen || hasAngle || hasW || hasH || hasApex; }
-    };
-    ShapeSpec& shapeSpec() { return m_shapeSpec; }
-    const ShapeSpec& shapeSpec() const { return m_shapeSpec; }
-    // What the panel shows while a value is still following the cursor.
-    struct ShapeNow { double len = 0.0, angleDeg = 0.0, w = 0.0, h = 0.0, apex = 0.0; };
-    ShapeNow shapeMeasure() const;
-    // Where the moving end of the current placement lands once the spec has had
-    // its say (Line end, Circle rim / diameter end, Arc chord end or apex).
-    glm::vec2 shapeResolve(glm::vec2 cursor) const;
-    // The four corners (in order round the edge) of the rectangle being placed
-    // for `cursor`, after the spec. False when not placing a rectangle.
-    bool rectResolve(glm::vec2 cursor, glm::vec2 out[4]) const;
-    // The panel's Place: commit the current placement from the spec and cursor.
-    // True when something was placed (a chord end counts for the arc).
-    bool commitShapeNow();
-    void clearShapeSpec() { m_shapeSpec = ShapeSpec{}; }
-    // A size the user typed (or stepped to) as 0 is pinned, not "follow the
-    // cursor". It cannot make a shape: the click / Place that would use it is
-    // refused and this says why (read-and-clear), like the Corner tool does.
-    bool typedSizeIsZero() const;
-    const char* consumeShapeRejection() { const char* r = m_shapeRejection; m_shapeRejection = nullptr; return r; }
     // Text tool settings - the popup edits these; the click consumes them.
     const std::string& getTextString() const { return m_textString; }
     void setTextString(const std::string& s) { m_textString = s; }
@@ -324,18 +257,6 @@ public:
     float getOffsetDistance() const { return m_offsetDistance; }
     void  setOffsetDistance(float d);
     void  flipOffsetSide() { setOffsetDistance(-m_offsetDistance); }
-    // Distance LOCK. While locked the cursor no longer drives the distance, so
-    // a typed value (or a position the user fixed with a tap) stays put instead
-    // of snapping back to wherever the pointer is - which is what overwrote a
-    // typed value the instant the finger/stylus moved. unlockOffsetDistance is
-    // the panel's "Follow cursor".
-    bool  offsetDistanceLocked() const { return m_offsetLocked; }
-    void  lockOffsetDistance()   { m_offsetLocked = true; }
-    void  unlockOffsetDistance() { m_offsetLocked = false; }
-    // Touch: a Distance-phase tap FIXES the distance (locks it) instead of
-    // committing, and the Offset button commits - a finger lifting would
-    // otherwise place the offset before it could be adjusted.
-    void  setOffsetTapLocks(bool v) { m_offsetTapLocks = v; }
     OffsetCorners getOffsetCorners() const { return m_offsetCorners; }
     void  setOffsetCorners(OffsetCorners c) { m_offsetCorners = c; recomputeOffsetPreview(); }
     // True when the current distance yields geometry that can be committed.
@@ -361,32 +282,6 @@ public:
     // arrangement as the Dimension tool's dimReadyToCommit().
     bool offsetReadyToCommit() const { return m_offsetCommitRequested; }
     void commitOffset(std::set<int>& outPoints, std::set<int>& outElements);
-    // Elements that were selected when the tool was chosen: while any stand,
-    // only they can be picked (and only they join the chain). Dropped by the
-    // first commit or by clearOffsetSelection().
-    int  offsetSelectionCount() const { return static_cast<int>(m_offsetOnly.size()); }
-    void clearOffsetSelection() { m_offsetOnly.clear(); m_offsetChainHover.clear(); }
-
-    // Reference tool: copy geometry that lies ON the sketch plane - body edges,
-    // a body's cross-section, another sketch's lines and circles (the snap
-    // references gathered on entry, see PlaneReferences) - into this sketch as
-    // real elements. Click takes one line or circle; Ctrl+click takes the whole
-    // connected run of lines it belongs to.
-    const std::vector<std::vector<glm::vec2>>& getReferenceHover() const { return m_refHover; }
-
-    // Corner tool: click a corner where two lines meet to round it (fillet,
-    // `size` = radius) or bevel it (chamfer, `size` = setback along each line).
-    // The size and kind are set from the panel and stay until changed, so a run
-    // of clicks does a run of corners.
-    bool   cornerChamfer() const { return m_cornerChamfer; }
-    void   setCornerChamfer(bool c) { m_cornerChamfer = c; }
-    double cornerSize() const { return m_cornerSize; }
-    void   setCornerSize(double s) { m_cornerSize = s; }
-    // The corner a click would act on (-1 = none) and the size of its marker.
-    int    cornerHoverPoint() const { return m_cornerHover; }
-    float  cornerHoverRadius() const { return pickTol(0.3f, 0.3f); }
-    // Why the last click did nothing, or nullptr. Read-and-clear.
-    const char* consumeCornerRejection() { const char* r = m_cornerRejection; m_cornerRejection = nullptr; return r; }
     void cancelOffset();
 
     // Rectangle's typed-value placement is two-stage: first Enter sets the
@@ -501,26 +396,6 @@ public:
         return result;
     }
 
-    // A click's pick radius: `frac` of the pointing step, but never below
-    // `floorMm` - EXCEPT that the floor itself is capped at a few pixels, so
-    // zooming in tightens the catch range instead of leaving it a fixed
-    // 0.3-0.5 mm (which at a 0.001 mm view is hundreds of pixels: clicks landed
-    // on geometry far from the cursor).
-    //
-    // Capped at kPickMaxPx on screen as well: tolStep() honours the user's own
-    // step outright once it clears a few pixels, and that step does not shrink
-    // with the zoom - so at the deepest zoom a 0.5 mm radius covered the whole
-    // window, and there was no spot left to click that did not pick the point
-    // (11-3-26).
-    static constexpr float kPickFloorPx = 10.0f;
-    static constexpr float kPickMaxPx = 16.0f;
-    float pickTol(float frac, float floorMm) const {
-        if (m_mmPerPixel > 0.0f) floorMm = std::min(floorMm, kPickFloorPx * m_mmPerPixel);
-        float tol = std::max(tolStep() * frac, floorMm);
-        if (m_mmPerPixel > 0.0f) tol = std::min(tol, kPickMaxPx * m_mmPerPixel);
-        return tol;
-    }
-
     // The lattice points snap to - scaled by zoom, so it changes as you zoom.
     // Also moves the tolerance step, so a caller that only ever sets this one
     // behaves exactly as this class did before the two were separated. The
@@ -596,9 +471,6 @@ public:
     void setRectMode(RectMode m) { m_rectMode = m; }
     RectMode getRectMode() const { return m_rectMode; }
     void setCircleMode(CircleMode m) { m_circleMode = m; }
-    // Circle tool: the typed size is a diameter rather than a radius. Sticky.
-    bool circleDiameter() const { return m_circleDiameter; }
-    void setCircleDiameter(bool d) { m_circleDiameter = d; }
     CircleMode getCircleMode() const { return m_circleMode; }
 
     // Hover-to-charge references (Full level only). Call once per frame during
@@ -710,7 +582,6 @@ private:
     int m_angleSnapDeg = 15; // line angle-snap increment (0 = off)
     RectMode   m_rectMode   = RectMode::Corner;
     CircleMode m_circleMode = CircleMode::Center;
-    bool       m_circleDiameter = false;
     // Session-sticky: whichever the user last drew arcs with stays selected, so
     // a run of fillet arcs is not a mode toggle per arc.
     ArcDimMode m_arcDimMode = ArcDimMode::Sweep;
@@ -822,35 +693,7 @@ private:
     // Select/drag state
     int m_dragPointId = -1;
     bool m_isDragging = false;
-    // Set when a Select drag begins; onMouseDown then baselines the snapped cursor.
-    bool m_dragNeedsBaseline = false;
-    glm::vec2 m_dragGrab{0.0f};   // single-point drag: point position minus snapped cursor at the press
-    std::set<int> dragPoints() const;
-    glm::vec2 dragAwareSnap(glm::vec2 pos, const std::set<int>& dragPts);
     bool m_lastDownAddedToSel = false; // Ctrl state for the current click
-    // The line the last Select click landed on, so a repeat click at the same
-    // spot can walk to the next of several overlapping lines.
-    struct RefPick { int kind = 0; size_t idx = 0; };   // kind: 0 none, 1 line, 2 circle, 3 point, 4 spline
-    RefPick pickReference(glm::vec2 pos) const;
-    void updateReferenceHover(glm::vec2 pos);
-    void handleReferenceTool(glm::vec2 pos);
-    int  pickCornerPoint(glm::vec2 pos) const;
-    void handleCornerTool(glm::vec2 pos);
-    bool   m_cornerChamfer = false;
-    double m_cornerSize = 2.0;
-    int    m_cornerHover = -1;
-    PolygonSpec m_polygonSpec;
-    ShapeSpec   m_shapeSpec;
-    // Click / Place with typed values: the one commit path. Handled = true.
-    bool commitTypedShape(glm::vec2 cursor);
-    void addLineDistanceConstraint(int aId, int bId, double value);
-    const char* m_cornerRejection = nullptr;
-    const char* m_shapeRejection = nullptr;
-    std::vector<std::vector<glm::vec2>> m_refHover;
-    std::set<int> m_offsetOnly;   // see offsetSelectionCount()
-    const std::set<int>* offsetOnly() const { return m_offsetOnly.empty() ? nullptr : &m_offsetOnly; }
-    int       m_lastLinePickId = -1;
-    glm::vec2 m_lastLinePickPos{0.0f};
     bool m_constructionDraw = false;
     std::set<int> m_selectedPoints;
     std::set<int> m_selectedLines;
@@ -947,19 +790,9 @@ private:
     OffsetPhase   m_offsetPhase = OffsetPhase::Pick;
     OffsetChain   m_offsetChain;      // captured on the Pick-phase click
     OffsetResult  m_offsetResult;     // live, recomputed as the cursor moves
-    // Offset from a pre-selection that spans several separate chains: the other
-    // chains ride along with the primary one. `m_offsetExtraSign` keeps each on
-    // the same side as the primary (outward stays outward for closed loops), so
-    // Flip and a typed distance move them all together.
-    std::vector<OffsetChain>  m_offsetExtra;
-    std::vector<OffsetResult> m_offsetExtraRes;
-    std::vector<float>        m_offsetExtraSign;
-    bool beginOffsetFromSelection();
     OffsetCorners m_offsetCorners = OffsetCorners::Round;
     float         m_offsetDistance = 0.0f;   // signed: + is right of travel
     bool          m_offsetCommitRequested = false;
-    bool          m_offsetLocked = false;     // distance frozen; the cursor is ignored
-    bool          m_offsetTapLocks = false;   // touch: a tap locks rather than commits
     // After a commit the cursor still sits on the new geometry; without this
     // the hover would re-highlight it instantly and the commit would look like
     // it did nothing. Cleared once the cursor moves clear.

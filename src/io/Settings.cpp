@@ -1,7 +1,6 @@
 #include "core/Units.h"
 #include <cmath>
 #include "Settings.h"
-#include "../i18n.h"   // languageCount(): the language index's upper bound
 
 #include <cctype>
 #include <cstring>
@@ -89,7 +88,7 @@ void applyKv(const std::map<std::string, std::string>& kv, AppSettings& s) {
     // Written so a nan (or zero/negative) falls to 1.0 rather than slipping
     // through min/max.
     if (!(s.uiScaleUser > 0.0f)) s.uiScaleUser = 1.0f;
-    if (s.uiScaleUser < 0.5f)    s.uiScaleUser = 0.5f;
+    if (s.uiScaleUser < 0.75f)   s.uiScaleUser = 0.75f;
     if (s.uiScaleUser > 2.5f)    s.uiScaleUser = 2.5f;
     readBool(kv, "touchMode",            s.touchMode);
     // Interface layout. Legacy first (older builds wrote the coupled bool
@@ -117,16 +116,12 @@ void applyKv(const std::map<std::string, std::string>& kv, AppSettings& s) {
     readIntClamped(kv, "touchRightTab",  s.touchRightTab, 0, 1);
     readFloat(kv, "touchRightW",         s.touchRightW);
     readFloat(kv, "touchRailW",          s.touchRailW);
-    readString(kv, "toolOrder",          s.toolOrder);
     readIntClamped(kv, "orbitButton",    s.orbitButton, 0, 2);
     readIntClamped(kv, "panButton",      s.panButton,   0, 2);
     readBool(kv, "levelOrbit",           s.levelOrbit);
     readBool(kv, "animateCamera",        s.animateCamera);
     readFloat(kv, "mouseSensitivity",    s.mouseSensitivity);
     readBool(kv, "autosaveEnabled",      s.autosaveEnabled);
-    readBool(kv, "autosavePeriodic",     s.autosavePeriodic);
-    readBool(kv, "deleteSketchRemovesBodies", s.deleteSketchRemovesBodies);
-    readIntClamped(kv, "autosaveIntervalMin", s.autosaveIntervalMin, 1, 60);
     readBool(kv, "invertCubeDrag",       s.invertCubeDrag);
     readFloat(kv, "doubleClickTimeSec",  s.doubleClickTimeSec);
     readFloat(kv, "filletProbeSeconds",  s.filletProbeSeconds);
@@ -161,8 +156,6 @@ void applyKv(const std::map<std::string, std::string>& kv, AppSettings& s) {
     readBool(kv, "includePrereleases",   s.includePrereleases);
     readBool(kv, "supporter",            s.supporter);
     readBool(kv, "snapToGrid",           s.snapToGrid);
-    readIntClamped(kv, "menuSectionsOpen", s.menuSectionsOpen, 0, 15);
-    readIntClamped(kv, "toolSwitches",     s.toolSwitches, 0, 0xFFFF);
     {
         std::string v;
         readString(kv, "aiProvider", v);
@@ -222,18 +215,8 @@ void applyKv(const std::map<std::string, std::string>& kv, AppSettings& s) {
     }
 
     readIntClamped(kv, "inferenceLevel", s.inferenceLevel, 0, 3);
-    // -1 is meaningful here ("never chosen"), so the floor is -1, not 0. The
-    // upper bound must track the shipped catalogue, never a literal: a build
-    // that adds a language (this one adds Simplified Chinese at index 6) would
-    // otherwise read back its own saved value as invalid, and the user's
-    // choice would silently revert on every restart. A value outside the
-    // shipped set means "never chosen" - NOT a clamp onto a neighbouring real
-    // language, which is how a saved Chinese choice used to come back Italian.
-    {
-        int v = s.language;
-        readInt(kv, "language", v);
-        s.language = (v >= -1 && v < materializr::languageCount()) ? v : -1;
-    }
+    // -1 is meaningful here ("never chosen"), so the floor is -1, not 0.
+    readIntClamped(kv, "language", s.language, -1, 5);
     readBool(kv, "showInferenceToolbarToggle", s.showInferenceToolbarToggle);
     readBool(kv, "exportGreyFills", s.exportGreyFills);
     readBool(kv, "showSelectionMeasurements", s.showSelectionMeasurements);
@@ -467,16 +450,12 @@ bool SettingsIO::save(const std::string& path, const AppSettings& s) {
     ofs << "touchRightTab = "       << s.touchRightTab       << "\n";
     ofs << "touchRightW = "         << s.touchRightW         << "\n";
     ofs << "touchRailW = "          << s.touchRailW          << "\n";
-    ofs << "toolOrder = "           << s.toolOrder           << "\n";
     ofs << "orbitButton = "         << s.orbitButton         << "\n";
     ofs << "panButton = "           << s.panButton           << "\n";
     ofs << "levelOrbit = "          << (s.levelOrbit ? "true" : "false") << "\n";
     ofs << "animateCamera = "       << (s.animateCamera ? "true" : "false") << "\n";
     ofs << "mouseSensitivity = "    << s.mouseSensitivity    << "\n";
     ofs << "autosaveEnabled = "     << (s.autosaveEnabled ? "true" : "false") << "\n";
-    ofs << "autosavePeriodic = "    << (s.autosavePeriodic ? "true" : "false") << "\n";
-    ofs << "deleteSketchRemovesBodies = " << (s.deleteSketchRemovesBodies ? "true" : "false") << "\n";
-    ofs << "autosaveIntervalMin = " << s.autosaveIntervalMin << "\n";
     ofs << "invertCubeDrag = "      << (s.invertCubeDrag ? "true" : "false") << "\n";
     ofs << "doubleClickTimeSec = "  << s.doubleClickTimeSec  << "\n";
     ofs << "filletProbeSeconds = "  << s.filletProbeSeconds  << "\n";
@@ -518,8 +497,6 @@ bool SettingsIO::save(const std::string& path, const AppSettings& s) {
     ofs << "includePrereleases = "      << (s.includePrereleases ? "true" : "false") << "\n";
     ofs << "supporter = "               << (s.supporter ? "true" : "false") << "\n";
     ofs << "snapToGrid = "              << (s.snapToGrid ? "true" : "false") << "\n";
-    ofs << "menuSectionsOpen = "        << s.menuSectionsOpen << "\n";
-    ofs << "toolSwitches = "            << s.toolSwitches     << "\n";
     ofs << "aiProvider = "         << aiProviderName(s.ai.provider)      << "\n";
     ofs << "aiAnthropicApiKey = "  << sanitizeValue(s.ai.anthropicApiKey) << "\n";
     ofs << "aiAnthropicModel = "   << sanitizeValue(s.ai.anthropicModel)  << "\n";
@@ -615,9 +592,6 @@ bool SettingsIO::exportJson(const std::string& path, const AppSettings& s) {
     ofs << "  \"animateCamera\": "           << b(s.animateCamera)      << ",\n";
     ofs << "  \"mouseSensitivity\": "        << s.mouseSensitivity      << ",\n";
     ofs << "  \"autosaveEnabled\": "         << b(s.autosaveEnabled)    << ",\n";
-    ofs << "  \"autosavePeriodic\": "        << b(s.autosavePeriodic)   << ",\n";
-    ofs << "  \"deleteSketchRemovesBodies\": " << b(s.deleteSketchRemovesBodies) << ",\n";
-    ofs << "  \"autosaveIntervalMin\": "     << s.autosaveIntervalMin   << ",\n";
     ofs << "  \"invertCubeDrag\": "          << b(s.invertCubeDrag)     << ",\n";
     ofs << "  \"doubleClickTimeSec\": "      << s.doubleClickTimeSec    << ",\n";
     ofs << "  \"filletProbeSeconds\": "      << s.filletProbeSeconds    << ",\n";
@@ -650,8 +624,6 @@ bool SettingsIO::exportJson(const std::string& path, const AppSettings& s) {
     ofs << "  \"includePrereleases\": " << b(s.includePrereleases) << ",\n";
     ofs << "  \"supporter\": "               << b(s.supporter)          << ",\n";
     ofs << "  \"snapToGrid\": "              << b(s.snapToGrid)         << ",\n";
-    ofs << "  \"menuSectionsOpen\": "        << s.menuSectionsOpen      << ",\n";
-    ofs << "  \"toolSwitches\": "            << s.toolSwitches          << ",\n";
     ofs << "  \"sketchGridStepUnits\": "     << s.sketchGridStep        << ",\n";
     ofs << "  \"inferenceLevel\": "          << s.inferenceLevel        << ",\n";
     ofs << "  \"language\": "                << s.language              << ",\n";

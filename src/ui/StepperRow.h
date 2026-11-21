@@ -23,7 +23,6 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cstdio>
-#include <limits>
 
 namespace materializr {
 
@@ -40,17 +39,6 @@ inline float steppedValue(float before, float delta, float minV, float maxV) {
     return v;
 }
 
-// The nudge the LENGTH steppers use: no ceiling, and no negative floor. The
-// call sites' +-50 / 20 / 10 bounds capped the buttons at a number nobody
-// chose (tester 2026-11-17: from 10 mm they stopped dead at 50, yet once a
-// viewport drag had pushed the value past 50 they ran free). Only a POSITIVE
-// minimum is kept, because there it means "this cannot be zero or negative"
-// (a radius, a wall thickness), not a comfort range.
-inline float lengthNudgedValue(float before, float delta, float minMm) {
-    const float inf = std::numeric_limits<float>::infinity();
-    return steppedValue(before, delta, minMm > 0.0f ? minMm : -inf, inf);
-}
-
 inline bool stepperRow(const char* id, float* value, bool allowNegative,
                        float minV, float maxV, float zeroValue = 0.0f) {
     static const float kMags[] = { 10.0f, 1.0f, 0.1f };
@@ -60,14 +48,7 @@ inline bool stepperRow(const char* id, float* value, bool allowNegative,
     const float h = std::max(ImGui::GetFrameHeight(), 34.0f);
 
     auto button = [&](const char* label) -> bool {
-        if (!first) {
-            // Wrap instead of overflowing: seven buttons are wider than a
-            // narrow op panel, most of all at touch scale.
-            const ImGuiStyle& st = ImGui::GetStyle();
-            const float w = ImGui::CalcTextSize(label).x + 2.0f * st.FramePadding.x;
-            const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
-            if (ImGui::GetItemRectMax().x + st.ItemSpacing.x + w <= right) ImGui::SameLine();
-        }
+        if (!first) ImGui::SameLine();
         first = false;
         return ImGui::Button(label, ImVec2(0.0f, h));
     };

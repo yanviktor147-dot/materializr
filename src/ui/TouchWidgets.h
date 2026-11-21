@@ -19,25 +19,13 @@ namespace touchui {
 // flyout, or a tool with options on a second press) with a small corner
 // wedge, so the menu is not hidden behind an unmarked button. Returns true on
 // press.
-//
-// A button with a menu has a second target: the corner wedge and a fingertip's
-// margin round it. `menuZonePressed`, when given, is set true on a press that
-// started there, so the caller can open the menu on the FIRST tap instead of
-// waiting for a second one.
 bool railButton(const char* id, const char* icon, const char* label, bool active,
-                float width = 0.0f, bool solid = false, bool hasMenu = false,
-                bool* menuZonePressed = nullptr);
-// Did the press now ending start in the bottom-right `zone` px of the item?
-bool menuZoneHit(const ImVec2& itemMin, const ImVec2& itemMax, float zone);
+                float width = 0.0f, bool solid = false, bool hasMenu = false);
 
 // The corner wedge itself, for buttons drawn by other code (the classic
 // toolbar's text buttons). `max` is the button's bottom-right corner; `size`
 // the icon size the wedge scales with.
 void drawMenuMark(ImDrawList* dl, const ImVec2& max, float size, ImU32 col);
-// Draw a catalogue icon (an MZ_ICON_* glyph OR one of the hand-drawn sentinel
-// icons - chamfer, primitive, thread, pattern...) centred on `center` at
-// `size` px. Lets classic's text buttons carry the same icons as the rails.
-void drawIcon(ImDrawList* dl, const ImVec2& center, float size, const char* icon, ImU32 col);
 
 // Floating action button: filled accent circle with a centered icon
 // (im-touch-lite's "+ create"). Returns true on press.
@@ -181,7 +169,6 @@ struct TreeLeafAction {
     bool clicked       = false;  // row body tapped (select)
     bool rightClicked  = false;  // row body long-pressed (open context menu)
     bool swatchClicked = false;  // colour swatch tapped (open a picker)
-    bool doubleClicked = false;  // row body double-tapped (open for editing)
 };
 // swatchRGB, when non-null, points at 3 contiguous floats (an rgb colour, e.g.
 // &glm::vec3::x); treeLeaf draws a colour swatch on the right with its own hit

@@ -48,15 +48,13 @@ enum class PickKind { None, Line, Arc, Circle, Spline };
 // refactor of Trim's helpers. Splines are picked (not ignored) so that a click
 // on one refuses cleanly instead of silently grabbing a line further away.
 PickKind pickOffsettable(const Sketch& sk, glm::vec2 pos, float threshold,
-                         int& outId, const std::set<int>* only = nullptr) {
+                         int& outId) {
     float bestDistSq = threshold * threshold;
     PickKind bestKind = PickKind::None;
     outId = -1;
-    // `only`: just these element ids are pickable (the user's own selection).
-    auto allowed = [&](int id) { return !only || only->count(id) != 0; };
 
     for (const auto& ln : sk.getLines()) {
-        if (ln.fromText || !allowed(ln.id)) continue;
+        if (ln.fromText) continue;
         const SketchPoint* a = sk.getPoint(ln.startPointId);
         const SketchPoint* b = sk.getPoint(ln.endPointId);
         if (!a || !b) continue;
@@ -64,14 +62,12 @@ PickKind pickOffsettable(const Sketch& sk, glm::vec2 pos, float threshold,
         if (dsq < bestDistSq) { bestDistSq = dsq; outId = ln.id; bestKind = PickKind::Line; }
     }
     for (const auto& ci : sk.getCircles()) {
-        if (!allowed(ci.id)) continue;
         const SketchPoint* c = sk.getPoint(ci.centerPointId);
         if (!c) continue;
         float d = glm::length(pos - c->pos) - static_cast<float>(ci.radius);
         if (d * d < bestDistSq) { bestDistSq = d * d; outId = ci.id; bestKind = PickKind::Circle; }
     }
     for (const auto& ar : sk.getArcs()) {
-        if (!allowed(ar.id)) continue;
         const SketchPoint* c = sk.getPoint(ar.centerPointId);
         const SketchPoint* s = sk.getPoint(ar.startPointId);
         const SketchPoint* e = sk.getPoint(ar.endPointId);
@@ -85,7 +81,6 @@ PickKind pickOffsettable(const Sketch& sk, glm::vec2 pos, float threshold,
         if (d * d < bestDistSq) { bestDistSq = d * d; outId = ar.id; bestKind = PickKind::Arc; }
     }
     for (const auto& sp : sk.getSplines()) {
-        if (!allowed(sp.id)) continue;
         std::vector<glm::vec2> samp = sk.sampleSpline2D(sp, 24);
         for (size_t i = 0; i + 1 < samp.size(); ++i) {
             float dsq = distSqPointSegment(pos, samp[i], samp[i + 1]);
@@ -105,22 +100,20 @@ struct Elem {
     int  a = -1, b = -1; // endpoint point ids, in the element's stored order
 };
 
-std::vector<Elem> collectElems(const Sketch& sk, const std::set<int>* only = nullptr) {
+std::vector<Elem> collectElems(const Sketch& sk) {
     std::vector<Elem> out;
-    auto allowed = [&](int id) { return !only || only->count(id) != 0; };
     for (const auto& ln : sk.getLines()) {
-        if (ln.fromText || !allowed(ln.id)) continue;
+        if (ln.fromText) continue;
         if (ln.startPointId == ln.endPointId) continue; // degenerate
         out.push_back({ElemKind::Line, ln.id, ln.startPointId, ln.endPointId});
     }
     for (const auto& ar : sk.getArcs())
-        if (allowed(ar.id))
-            out.push_back({ElemKind::Arc, ar.id, ar.startPointId, ar.endPointId});
+        out.push_back({ElemKind::Arc, ar.id, ar.startPointId, ar.endPointId});
     // A spline joins the chain by its END control points only. Its interior
     // control points are ordinary sketch points, but nothing "meets" a curve
     // mid-span in this sketcher, so they take no part in adjacency.
     for (const auto& sp : sk.getSplines()) {
-        if (sp.controlPointIds.size() < 2 || !allowed(sp.id)) continue;
+        if (sp.controlPointIds.size() < 2) continue;
         out.push_back({ElemKind::Spline, sp.id,
                        sp.controlPointIds.front(), sp.controlPointIds.back()});
     }
@@ -133,7 +126,6 @@ OffsetSeg makeArcSeg(const Sketch& sk, const SketchArc& ar, bool forward) {
     OffsetSeg s;
     s.kind = OffsetSeg::Kind::Arc;
     s.sourceId = ar.id;
-    s.construction = ar.isConstruction;
     const SketchPoint* c = sk.getPoint(ar.centerPointId);
     const SketchPoint* a = sk.getPoint(ar.startPointId);
     const SketchPoint* b = sk.getPoint(ar.endPointId);
@@ -161,7 +153,6 @@ OffsetSeg makeSplineSeg(const Sketch& sk, const SketchSpline& sp, bool forward) 
     OffsetSeg s;
     s.kind = OffsetSeg::Kind::Spline;
     s.sourceId = sp.id;
-    s.construction = sp.isConstruction;
     s.srcCtrlCount = static_cast<int>(sp.controlPointIds.size());
     // The same B-spline sampling buildWires() emits, so the offset is measured
     // against the curve the user actually sees and extrudes.
@@ -175,7 +166,6 @@ OffsetSeg makeLineSeg(const Sketch& sk, const SketchLine& ln, bool forward) {
     OffsetSeg s;
     s.kind = OffsetSeg::Kind::Line;
     s.sourceId = ln.id;
-    s.construction = ln.isConstruction;
     const SketchPoint* a = sk.getPoint(forward ? ln.startPointId : ln.endPointId);
     const SketchPoint* b = sk.getPoint(forward ? ln.endPointId : ln.startPointId);
     s.p0 = a ? a->pos : glm::vec2(0.0f);
@@ -271,11 +261,10 @@ float OffsetSeg::length() const {
 
 // --- Chain walk -----------------------------------------------------------
 
-OffsetChain walkOffsetChain(const Sketch& sk, glm::vec2 pos, float threshold,
-                            const std::set<int>* only) {
+OffsetChain walkOffsetChain(const Sketch& sk, glm::vec2 pos, float threshold) {
     OffsetChain chain;
     int hitId = -1;
-    PickKind kind = pickOffsettable(sk, pos, threshold, hitId, only);
+    PickKind kind = pickOffsettable(sk, pos, threshold, hitId);
     if (kind == PickKind::None) return chain;
 
     if (kind == PickKind::Circle) {
@@ -286,7 +275,6 @@ OffsetChain walkOffsetChain(const Sketch& sk, glm::vec2 pos, float threshold,
             OffsetSeg s;
             s.kind = OffsetSeg::Kind::Circle;
             s.sourceId = ci.id;
-            s.construction = ci.isConstruction;
             s.c = c->pos;
             s.r = static_cast<float>(ci.radius);
             s.a0 = 0.0f;
@@ -299,7 +287,7 @@ OffsetChain walkOffsetChain(const Sketch& sk, glm::vec2 pos, float threshold,
         return chain;
     }
 
-    const std::vector<Elem> elems = collectElems(sk, only);
+    const std::vector<Elem> elems = collectElems(sk);
 
     std::map<int, std::vector<size_t>> atPoint; // point id -> element indices
     for (size_t i = 0; i < elems.size(); ++i) {
@@ -356,8 +344,8 @@ OffsetChain walkOffsetChain(const Sketch& sk, glm::vec2 pos, float threshold,
     }
 
     // Backward from the start element's `a` end (skipped once closed).
-    int headPt = elems[startIdx].a;
     if (!chain.closed) {
+        int headPt = elems[startIdx].a;
         for (;;) {
             bool closes = false;
             size_t prev = advance(headPt, steps.front().idx, closes);
@@ -370,13 +358,6 @@ OffsetChain walkOffsetChain(const Sketch& sk, glm::vec2 pos, float threshold,
             visited.insert(prev);
             headPt = otherEnd(elems[prev], headPt);
         }
-        // A loop with something else attached at one corner: both walks stop
-        // at that corner (three elements meet there, so it counts as a branch)
-        // - but they stop at the SAME point, having gone right round. That is
-        // still one closed contour, and the corner must be joined like any
-        // other, not left open when the offset moves outward.
-        if (!chain.closed && steps.size() >= 2 && headPt == tailPt)
-            chain.closed = true;
     }
 
     for (const Step& st : steps) {
@@ -598,49 +579,17 @@ OffsetResult offsetChain(const OffsetChain& ch, float d, OffsetCorners corners) 
         OffsetSeg s = src;
         s.sourceId = -1;
         if (src.kind == OffsetSeg::Kind::Spline) {
-            // No exact offset of a B-spline exists, so offset the sampled curve.
-            // Along smooth stretches that is point by point along the normal, taken
-            // from the ADJACENT segment directions averaged at each sample, which
-            // keeps a smooth curve smooth instead of faceting it. At a sample where
-            // the curve turns sharply (a tight bend sampled coarsely) averaging the
-            // two normals would cut straight across the bend, and the result sits
-            // CLOSER to the source than the offset distance - which pruning then
-            // condemns, leaving a gap. There the offset is that of the polyline
-            // itself: on the opening side a round join (an arc of radius |d| about
-            // the sample), on the closing side both end points (the small loop that
-            // makes is cut out and rejoined by pruneOffset).
+            // No exact offset of a B-spline exists, so offset the sampled curve
+            // point by point along its normal. Normals come from the ADJACENT
+            // segment directions averaged at each interior sample, which keeps
+            // a smooth curve smooth instead of faceting it.
             const std::vector<glm::vec2>& q = src.pts;
             s.pts.clear();
             s.pts.reserve(q.size());
-            constexpr float kSmoothTurn = 0.05f;   // rad: gentler than this is smooth
             for (size_t i = 0; i < q.size(); ++i) {
-                const bool hasIn = i > 0 && glm::length(q[i] - q[i - 1]) > 1e-9f;
-                const bool hasOut = i + 1 < q.size() && glm::length(q[i + 1] - q[i]) > 1e-9f;
-                glm::vec2 tin = hasIn ? glm::normalize(q[i] - q[i - 1]) : glm::vec2(0.0f);
-                glm::vec2 tout = hasOut ? glm::normalize(q[i + 1] - q[i]) : glm::vec2(0.0f);
-                if (hasIn && hasOut) {
-                    const float cr = tin.x * tout.y - tin.y * tout.x;
-                    const float turn = std::atan2(std::abs(cr), glm::dot(tin, tout));
-                    if (turn > kSmoothTurn) {
-                        const glm::vec2 n0 = rightNormal(tin), n1 = rightNormal(tout);
-                        if (cr * d > 0.0f) {                       // opening: round join
-                            const float a0 = std::atan2(n0.y, n0.x);
-                            float da = std::atan2(n1.y, n1.x) - a0;
-                            while (da > static_cast<float>(M_PI)) da -= kTwoPi;
-                            while (da < -static_cast<float>(M_PI)) da += kTwoPi;
-                            const int steps = std::max(1, static_cast<int>(std::ceil(std::abs(da) / 0.1f)));
-                            for (int k = 0; k <= steps; ++k) {
-                                const float a = a0 + da * static_cast<float>(k) / steps;
-                                s.pts.push_back(q[i] + glm::vec2(std::cos(a), std::sin(a)) * d);
-                            }
-                        } else {                                   // closing: both ends
-                            s.pts.push_back(q[i] + n0 * d);
-                            s.pts.push_back(q[i] + n1 * d);
-                        }
-                        continue;
-                    }
-                }
-                glm::vec2 t = tin + tout;
+                glm::vec2 t(0.0f);
+                if (i > 0)             t += glm::normalize(q[i] - q[i - 1]);
+                if (i + 1 < q.size())  t += glm::normalize(q[i + 1] - q[i]);
                 float tl = glm::length(t);
                 if (tl < 1e-9f) continue;
                 s.pts.push_back(q[i] + rightNormal(t / tl) * d);
@@ -695,7 +644,6 @@ OffsetResult offsetChain(const OffsetChain& ch, float d, OffsetCorners corners) 
         if (opening && (corners == OffsetCorners::Round || reversal)) {
             inserted[i] = roundCorner(v, raw[i].seg.p1, raw[j].seg.p0, d,
                                       reversal ? d : cross);
-            inserted[i].construction = raw[i].seg.construction;
             hasInsert[i] = true;
             continue;
         }
@@ -707,7 +655,6 @@ OffsetResult offsetChain(const OffsetChain& ch, float d, OffsetCorners corners) 
             // pruneOffset to resolve.
             if (opening) {
                 inserted[i] = roundCorner(v, raw[i].seg.p1, raw[j].seg.p0, d, cross);
-                inserted[i].construction = raw[i].seg.construction;
                 hasInsert[i] = true;
             }
             continue;
@@ -844,106 +791,6 @@ float signedDistanceToChain(const OffsetChain& ch, glm::vec2 q) {
     return (glm::dot(q - ch.segs[bi].at(bt), n) >= 0.0f) ? best : -best;
 }
 
-namespace {
-
-// Proper crossing of two segments: parameters along each, or false.
-bool segCross(glm::vec2 a0, glm::vec2 a1, glm::vec2 b0, glm::vec2 b1, float& ua, float& ub) {
-    const glm::vec2 r = a1 - a0, q = b1 - b0;
-    const float den = r.x * q.y - r.y * q.x;
-    if (std::abs(den) < 1e-12f) return false;
-    const glm::vec2 w = b0 - a0;
-    ua = (w.x * q.y - w.y * q.x) / den;
-    ub = (w.x * r.y - w.y * r.x) / den;
-    return ua >= 0.0f && ua <= 1.0f && ub >= 0.0f && ub <= 1.0f;
-}
-
-// Pruning cuts the invalid LOOP out of an offset - on the inside of a bend tighter
-// than the offset distance the raw curve overshoots, loops and crosses itself - and
-// keeps the good pieces either side. A general clipper would join them where the
-// loop crosses itself; cutting alone leaves them apart, which is the gap that
-// moved around as the distance changed on tight curves (#186). Join consecutive
-// kept pieces at the crossing of A's tail and B's head, trimming each back to it.
-// Where they do not cross within reach (the offset really is too big for the
-// profile) the gap is left as it was.
-void joinAcrossLoops(std::vector<OffsetSeg>& kept, float ad, float weldTol) {
-    const float step = std::max(0.05f, ad * 0.1f);
-    for (size_t k = 0; k + 1 < kept.size(); ++k) {
-        OffsetSeg& A = kept[k];
-        OffsetSeg& B = kept[k + 1];
-        const float gap = glm::length(A.at(1.0f) - B.at(0.0f));
-        if (gap < 1e-3f) continue;                       // already meet
-        const float reach = std::max(10.0f * ad, 3.0f * gap);
-        auto portion = [&](const OffsetSeg& sg, bool tail, std::vector<glm::vec2>& pts,
-                           float& t0, float& t1) {
-            const float len = std::max(sg.length(), 1e-6f);
-            const float f = std::min(1.0f, reach / len);
-            t0 = tail ? 1.0f - f : 0.0f;
-            t1 = tail ? 1.0f : f;
-            const int n = std::clamp(static_cast<int>(std::ceil(f * len / step)), 2, 400);
-            pts.clear();
-            for (int i = 0; i <= n; ++i)
-                pts.push_back(sg.at(t0 + (t1 - t0) * static_cast<float>(i) / n));
-        };
-        std::vector<glm::vec2> pa, pb;
-        float a0, a1, b0, b1;
-        portion(A, true, pa, a0, a1);
-        portion(B, false, pb, b0, b1);
-        const float la = std::max(A.length(), 1e-6f), lb = std::max(B.length(), 1e-6f);
-        float bestCost = std::numeric_limits<float>::max();
-        float bestTa = 0.0f, bestTb = 0.0f;
-        glm::vec2 bestX(0.0f);
-        const int na = static_cast<int>(pa.size()) - 1, nb = static_cast<int>(pb.size()) - 1;
-        for (int i = 0; i < na; ++i)
-            for (int j = 0; j < nb; ++j) {
-                float ua, ub;
-                if (!segCross(pa[i], pa[i + 1], pb[j], pb[j + 1], ua, ub)) continue;
-                const float ta = a0 + (a1 - a0) * (static_cast<float>(i) + ua) / na;
-                const float tb = b0 + (b1 - b0) * (static_cast<float>(j) + ub) / nb;
-                // The loop being cut out: what A loses past the crossing plus what B
-                // loses before it. The smallest is the nearest crossing to the gap.
-                const float cost = (1.0f - ta) * la + tb * lb;
-                if (cost < bestCost) {
-                    bestCost = cost; bestTa = ta; bestTb = tb;
-                    bestX = pa[i] + (pa[i + 1] - pa[i]) * ua;
-                }
-            }
-        // The pieces all but touch (sampling error at a tangent meeting): close the
-        // hairline so they weld into one chain.
-        auto closeHairline = [&]() {
-            if (gap <= std::max(std::max(0.01f, 0.005f * ad), weldTol)) {
-                const glm::vec2 mid = 0.5f * (A.at(1.0f) + B.at(0.0f));
-                A.p1 = mid;
-                B.p0 = mid;
-                if (A.kind == OffsetSeg::Kind::Spline && !A.pts.empty()) A.pts.back() = mid;
-                if (B.kind == OffsetSeg::Kind::Spline && !B.pts.empty()) B.pts.front() = mid;
-            }
-        };
-        if (bestCost == std::numeric_limits<float>::max()) { closeHairline(); continue; }
-        if (bestTa < 1e-3f || bestTb > 1.0f - 1e-3f) {      // would eat a whole piece
-            closeHairline();
-            continue;
-        }
-        OffsetSeg na2 = subSeg(A, 0.0f, bestTa);
-        OffsetSeg nb2 = subSeg(B, bestTb, 1.0f);
-        // The far ends are untouched: keep exactly the ends an earlier join gave them.
-        na2.p0 = A.p0;
-        nb2.p1 = B.p1;
-        if (na2.kind == OffsetSeg::Kind::Spline && !na2.pts.empty() && !A.pts.empty())
-            na2.pts.front() = A.pts.front();
-        if (nb2.kind == OffsetSeg::Kind::Spline && !nb2.pts.empty() && !B.pts.empty())
-            nb2.pts.back() = B.pts.back();
-        // Both pieces now end / start at exactly the crossing, so they share one point.
-        na2.p1 = bestX;
-        nb2.p0 = bestX;
-        if (na2.kind == OffsetSeg::Kind::Spline && !na2.pts.empty()) na2.pts.back() = bestX;
-        if (nb2.kind == OffsetSeg::Kind::Spline && !nb2.pts.empty()) nb2.pts.front() = bestX;
-        A = std::move(na2);
-        B = std::move(nb2);
-    }
-}
-
-} // anonymous namespace
-
 void pruneOffset(OffsetResult& res, const OffsetChain& src, float d) {
     if (!res.valid) return;
     const float ad = std::abs(d);
@@ -959,44 +806,8 @@ void pruneOffset(OffsetResult& res, const OffsetChain& src, float d) {
                                 : std::max(1e-4f, 1e-3f * ad);
     const float floorDist = ad - eps;
 
-    // A closed profile offset INWARD by more than it can take turns inside out,
-    // and the flipped edges end up outside the profile yet farther than |d| from
-    // it - so distance alone keeps them (#182: a triangle offset by 42 mm gave
-    // three stray corners). The offset must also lie on the side the sign asks
-    // for: right of travel is outside for a counter-clockwise loop.
-    std::vector<glm::vec2> loop;
-    bool wantInside = false;
-    if (src.closed) {
-        std::vector<std::vector<glm::vec2>> runs;
-        densifySegs(src.segs, runs);
-        if (runs.size() == 1 && runs[0].size() >= 4) {
-            loop = std::move(runs[0]);
-            double area = 0.0;
-            for (size_t i = 0; i + 1 < loop.size(); ++i)
-                area += static_cast<double>(loop[i].x) * loop[i + 1].y
-                      - static_cast<double>(loop[i + 1].x) * loop[i].y;
-            if (std::abs(area) > 1e-9)
-                wantInside = (d > 0.0f) ? (area < 0.0) : (area > 0.0);
-            else
-                loop.clear();
-        }
-    }
-    auto insideLoop = [&](glm::vec2 q) {
-        bool in = false;
-        for (size_t i = 0, j = loop.size() - 1; i < loop.size(); j = i++) {
-            const glm::vec2 a = loop[i], b = loop[j];
-            if (((a.y > q.y) != (b.y > q.y)) &&
-                (q.x < (b.x - a.x) * (q.y - a.y) / (b.y - a.y) + a.x))
-                in = !in;
-        }
-        return in;
-    };
-
     auto ok = [&](const OffsetSeg& s, float t) {
-        const glm::vec2 q = s.at(t);
-        if (distanceToChain(src, q) < floorDist) return false;
-        if (!loop.empty() && insideLoop(q) != wantInside) return false;
-        return true;
+        return distanceToChain(src, s.at(t)) >= floorDist;
     };
 
     std::vector<OffsetSeg> kept;
@@ -1009,12 +820,6 @@ void pruneOffset(OffsetResult& res, const OffsetChain& src, float d) {
         const float step = std::max(0.1f, ad * 0.25f);
         int n = static_cast<int>(std::ceil(s.length() / step));
         n = std::clamp(n, 16, 128);
-        // A sampled curve is tested at every one of its own points. Where two
-        // offset arcs cross under a sharp peak, the valid stretch that joins them
-        // can be a few samples long; stepping over it left a gap between the
-        // pieces that moved around as the distance changed (#182).
-        if (s.kind == OffsetSeg::Kind::Spline && s.pts.size() > 2)
-            n = std::clamp(static_cast<int>(s.pts.size()) - 1, n, 2000);
 
         std::vector<bool> good(n + 1);
         for (int i = 0; i <= n; ++i) good[i] = ok(s, static_cast<float>(i) / n);
@@ -1053,9 +858,6 @@ void pruneOffset(OffsetResult& res, const OffsetChain& src, float d) {
     }
 
     if (kept.size() != res.segs.size()) anyChange = true;
-    // Pieces cut at the sampled-distance band stop up to a few bands short of
-    // where they would cross; for a sampled curve that is the same size as its error.
-    joinAcrossLoops(kept, ad, hasSpline ? 6.0f * eps : 0.0f);
     res.segs = std::move(kept);
 
     if (res.segs.empty()) {
@@ -1121,8 +923,7 @@ std::vector<glm::vec2> fitSplineCtrl(const std::vector<glm::vec2>& curve,
 
 void applyOffset(Sketch& sk, const OffsetResult& res,
                  const std::function<int(glm::vec2)>& weld,
-                 std::set<int>& outPoints, std::set<int>& outElements,
-                 bool invertConstruction) {
+                 std::set<int>& outPoints, std::set<int>& outElements) {
     if (!res.valid) return;
 
     // Segments that meet must share ONE point id, or the committed geometry is
@@ -1140,28 +941,16 @@ void applyOffset(Sketch& sk, const OffsetResult& res,
         return id;
     };
 
-    // Offsetting a whole polygon (sharp corners) gives a polygon again: gathered
-    // while the lines go in, turned into a record at the end.
-    bool onlyLines = res.closed;
-    std::vector<int> lineVerts;       // the offset vertices, in order
     for (const OffsetSeg& s : res.segs) {
-        const bool construction = s.construction != invertConstruction;
-        auto made = [&](int id) {
-            if (construction) sk.setElementConstruction(id, true);
-            outElements.insert(id);
-        };
-        if (s.kind != OffsetSeg::Kind::Line) onlyLines = false;
         switch (s.kind) {
         case OffsetSeg::Kind::Line: {
             int a = ptFor(s.p0), b = ptFor(s.p1);
-            if (a >= 0 && b >= 0 && a != b) made(sk.addLine(a, b));
-            else onlyLines = false;
-            lineVerts.push_back(a);
+            if (a >= 0 && b >= 0 && a != b) outElements.insert(sk.addLine(a, b));
             break;
         }
         case OffsetSeg::Kind::Circle: {
             int c = ptFor(s.c);
-            if (c >= 0) made(sk.addCircle(c, s.r));
+            if (c >= 0) outElements.insert(sk.addCircle(c, s.r));
             break;
         }
         case OffsetSeg::Kind::Spline: {
@@ -1182,7 +971,7 @@ void applyOffset(Sketch& sk, const OffsetResult& res,
                 // Consecutive duplicates would make a degenerate span.
                 if (ids.empty() || ids.back() != id) ids.push_back(id);
             }
-            if (ids.size() >= 2) made(sk.addSpline(ids));
+            if (ids.size() >= 2) outElements.insert(sk.addSpline(ids));
             break;
         }
         case OffsetSeg::Kind::Arc: {
@@ -1195,65 +984,9 @@ void applyOffset(Sketch& sk, const OffsetResult& res,
             glm::vec2 ep = (s.sweep >= 0.0f) ? s.p1 : s.p0;
             int a = ptFor(sp), b = ptFor(ep);
             if (c >= 0 && a >= 0 && b >= 0)
-                made(sk.addArc(c, a, b, s.r));
+                outElements.insert(sk.addArc(c, a, b, s.r));
             break;
         }
-        }
-    }
-
-    // Whole regular polygon, all corners mitred: the offset is a regular polygon with
-    // the same sides and centre, so keep it as one (it edits by sides and size). The
-    // offset segments do not say where they came from, so match by geometry: a
-    // polygon with this many sides whose every corner has an offset corner on the
-    // same ray from the centre, all at one distance.
-    if (onlyLines && lineVerts.size() >= 3) {
-        const float kTwoPi = 2.0f * static_cast<float>(M_PI);
-        auto angleOf = [](glm::vec2 v) { return std::atan2(v.y, v.x); };
-        for (const SketchPolygon& src : sk.getPolygons()) {
-            if (src.vertexPointIds.size() != lineVerts.size()) continue;
-            const SketchPoint* ctr = sk.getPoint(src.centerPointId);
-            if (!ctr) continue;
-            const glm::vec2 c = ctr->pos;
-            std::vector<glm::vec2> offs;
-            double sum = 0.0;
-            bool ok = true;
-            for (int v : lineVerts) {
-                const SketchPoint* vp = (v >= 0) ? sk.getPoint(v) : nullptr;
-                if (!vp) { ok = false; break; }
-                offs.push_back(vp->pos - c);
-                sum += glm::length(offs.back());
-            }
-            if (!ok) continue;
-            const double r = sum / static_cast<double>(offs.size());
-            if (r < 1e-6) continue;
-            for (const glm::vec2& o : offs)
-                if (std::abs(glm::length(o) - r) > 1e-3 * r + 1e-4) ok = false;
-            if (!ok) continue;
-            // Every source corner must have exactly one offset corner on its ray.
-            std::vector<bool> used(offs.size(), false);
-            for (int sv : src.vertexPointIds) {
-                const SketchPoint* sp = sk.getPoint(sv);
-                if (!sp) { ok = false; break; }
-                const float sa = angleOf(sp->pos - c);
-                bool matched = false;
-                for (size_t i = 0; i < offs.size() && !matched; ++i) {
-                    if (used[i]) continue;
-                    float da = std::fabs(angleOf(offs[i]) - sa);
-                    da = std::min(da, kTwoPi - da);
-                    if (da < 2e-3f) { used[i] = true; matched = true; }
-                }
-                if (!matched) { ok = false; break; }
-            }
-            if (!ok) continue;
-            SketchPolygon np;
-            np.centerPointId = src.centerPointId;
-            np.radius = r;
-            np.sides = static_cast<int>(lineVerts.size());
-            np.isConstruction = src.isConstruction != invertConstruction;
-            np.vertexPointIds = lineVerts;
-            np.lineIds = lineVerts;                   // only its size is read; edges are looked up
-            sk.copyPolygonRecords({np}, [](int id) { return id; });
-            break;   // (the sketch's polygon list just grew: stop walking it)
         }
     }
 }
@@ -1278,10 +1011,7 @@ void densifySegs(const std::vector<OffsetSeg>& segs,
             glm::vec2 d = s.p0 - run.back();
             if (glm::dot(d, d) > kJoinTol2) flush();
         }
-        // An arc trimmed to a crossing keeps its stated ends (what gets committed);
-        // its swept geometry can sit a few microns off them.
-        if (run.empty())
-            run.push_back(s.kind == OffsetSeg::Kind::Arc ? s.p0 : s.at(0.0f));
+        if (run.empty()) run.push_back(s.at(0.0f));
 
         if (s.kind == OffsetSeg::Kind::Line) {
             run.push_back(s.at(1.0f));
@@ -1293,7 +1023,6 @@ void densifySegs(const std::vector<OffsetSeg>& segs,
                         std::ceil(std::abs(s.sweep) / (static_cast<float>(M_PI) / 24.0f))));
             for (int i = 1; i <= n; ++i)
                 run.push_back(s.at(static_cast<float>(i) / static_cast<float>(n)));
-            if (s.kind == OffsetSeg::Kind::Arc) run.back() = s.p1;
         }
     }
     flush();

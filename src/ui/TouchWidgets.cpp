@@ -168,36 +168,6 @@ void drawIconCentered(ImDrawList* dl, const ImVec2& center, float size,
         }
         return;
     }
-    // Circle / Rectangle "draw from" variants (U+E009..U+E00C): the shape plus
-    // the dots that say where the clicks go. Dots sit ON the outline (a click
-    // lands on the rim / a corner) and the centre dot at the centre.
-    {
-        const bool c1 = std::strcmp(icon, "\xee\x80\x89") == 0;   // circle, centre
-        const bool c2 = std::strcmp(icon, "\xee\x80\x8a") == 0;   // circle, 2 points
-        const bool r1 = std::strcmp(icon, "\xee\x80\x8b") == 0;   // rect, corner
-        const bool r2 = std::strcmp(icon, "\xee\x80\x8c") == 0;   // rect, centre
-        if (c1 || c2 || r1 || r2) {
-            const float th  = std::max(1.5f, size * 0.075f);
-            const float dot = std::max(2.0f, size * 0.10f);
-            auto dotAt = [&](float x, float y) { dl->AddCircleFilled(ImVec2(x, y), dot, col); };
-            if (c1 || c2) {
-                const float r = size * 0.38f;
-                dl->AddCircle(center, r, col, 0, th);
-                const float k = r * 0.70710678f;            // cos / sin 45 degrees
-                dotAt(center.x + k, center.y - k);          // 45 degrees (up and right)
-                if (c1) dotAt(center.x, center.y);
-                else    dotAt(center.x - k, center.y + k);  // 225 degrees
-            } else {
-                const float hw = size * 0.42f, hh = size * 0.32f;
-                dl->AddRect(ImVec2(center.x - hw, center.y - hh),
-                            ImVec2(center.x + hw, center.y + hh), col, 0.0f, 0, th);
-                dotAt(center.x + hw, center.y - hh);        // upper-right
-                if (r1) dotAt(center.x - hw, center.y + hh); // lower-left
-                else    dotAt(center.x, center.y);
-            }
-            return;
-        }
-    }
     ImFont* font = ImGui::GetFont();
     const ImVec2 ts = font->CalcTextSizeA(size, FLT_MAX, 0.0f, icon);
     dl->AddText(font, size, ImVec2(center.x - ts.x * 0.5f, center.y - ts.y * 0.5f),
@@ -205,10 +175,6 @@ void drawIconCentered(ImDrawList* dl, const ImVec2& center, float size,
 }
 
 } // namespace
-
-void drawIcon(ImDrawList* dl, const ImVec2& center, float size, const char* icon, ImU32 col) {
-    drawIconCentered(dl, center, size, icon, col);
-}
 
 void drawMenuMark(ImDrawList* dl, const ImVec2& max, float size, ImU32 col) {
     // A small right-angle wedge in the bottom-right corner: the convention for
@@ -222,17 +188,8 @@ void drawMenuMark(ImDrawList* dl, const ImVec2& max, float size, ImU32 col) {
                           ImVec2(max.x - in,       max.y - in - leg), col);
 }
 
-bool menuZoneHit(const ImVec2& itemMin, const ImVec2& itemMax, float zone) {
-    // Where the press STARTED, not where it ended: a tap that slides a few
-    // pixels out of the corner is still the corner's tap. Mouse and touch both
-    // arrive here (touch is mapped onto the mouse).
-    const ImVec2 c = ImGui::GetIO().MouseClickedPos[0];
-    return c.x >= itemMax.x - zone && c.x <= itemMax.x &&
-           c.y >= itemMax.y - zone && c.y <= itemMax.y && c.x >= itemMin.x && c.y >= itemMin.y;
-}
-
 bool railButton(const char* id, const char* icon, const char* label, bool active,
-                float width, bool solid, bool hasMenu, bool* menuZonePressed) {
+                float width, bool solid, bool hasMenu) {
     const float s = uiScale();
     const float w = width > 0.0f ? width : ImGui::GetContentRegionAvail().x;
     // 52 (was 62): shorter so the whole tool set fits with less scrolling,
@@ -245,12 +202,6 @@ bool railButton(const char* id, const char* icon, const char* label, bool active
     const bool pressed = ImGui::InvisibleButton("##rail", ImVec2(w, h));
     const bool hovered = ImGui::IsItemHovered();
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    // The corner wedge is a target of its own: the wedge plus a comfortable
-    // margin round it (about a fingertip), so the menu opens on the FIRST tap.
-    const float zone = 30.0f * s;
-    const bool inZone = hasMenu && hovered &&
-        ImGui::GetMousePos().x >= p.x + w - zone && ImGui::GetMousePos().y >= p.y + h - zone;
-    if (menuZonePressed) *menuZonePressed = pressed && hasMenu && menuZoneHit(p, ImVec2(p.x + w, p.y + h), zone);
 
     if (active) {
         dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h),
@@ -273,7 +224,7 @@ bool railButton(const char* id, const char* icon, const char* label, bool active
     dl->AddText(font, ls,
                 ImVec2(p.x + (w - lsz.x) * 0.5f, p.y + h * 0.62f), fgDim, label);
     if (hasMenu)
-        drawMenuMark(dl, ImVec2(p.x + w, p.y + h), 22.0f * s, inZone ? fg : fgDim);
+        drawMenuMark(dl, ImVec2(p.x + w, p.y + h), 22.0f * s, fgDim);
     ImGui::PopID();
     return pressed;
 }
@@ -657,10 +608,7 @@ bool numberField(const char* id, const char* label, double* v, const char* fmt,
     // scroll-into-view by a frame, so it runs once the pad has a real height.
     // fresh: buf still holds the value the pad opened with, so the FIRST key
     // replaces it (calculator-style) instead of appending to "10.00".
-    // lastV: the value the pad last agreed with. When the caller changes *v
-    // behind the pad's back (a -10..+10 stepper beside it) the open entry is
-    // rebuilt from it, so the readout never shows a stale number.
-    struct Entry { char buf[32]; bool fresh; double lastV; };
+    struct Entry { char buf[32]; bool fresh; };
     static std::map<ImGuiID, Entry> s_entries;
     static ImGuiID s_open = 0;
     static ImGuiID s_justOpened = 0;
@@ -668,14 +616,6 @@ bool numberField(const char* id, const char* label, double* v, const char* fmt,
     ImGui::PushID(id);
     const ImGuiID key = ImGui::GetID("##numfield");
     const bool openHere = (s_open == key);
-    if (openHere && !(hint && *v <= 0.0)) {
-        Entry& oe = s_entries[key];
-        if (*v != oe.lastV) {
-            std::snprintf(oe.buf, sizeof(oe.buf), fmt ? fmt : "%g", *v);
-            oe.fresh = true;     // the next digit replaces it, as when opened
-            oe.lastV = *v;
-        }
-    }
 
     // Honour ImGui's label conventions, which InputDouble got for free and a
     // plain TextUnformatted does not: "##id" means NO visible label (printing
@@ -741,7 +681,6 @@ bool numberField(const char* id, const char* label, double* v, const char* fmt,
                 std::snprintf(e.buf, sizeof(e.buf), fmt ? fmt : "%g", *v);
                 e.fresh = true;
             }
-            e.lastV = *v;
             s_entries[key] = e;
             s_open = key;
             s_justOpened = key;
@@ -928,19 +867,6 @@ TreeLeafAction treeLeaf(const char* id, const char* icon, const char* label,
     const float rowBottom =
         ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y;
 
-    // A row outside the visible area draws nothing. Everything below goes
-    // straight into the window's draw list, which ImGui does NOT cull: 1000
-    // bodies cost ~64 vertices a row, and a draw list that passes 65535
-    // vertices cannot be indexed with 16 bits - which is all OpenGL ES 3.0 has
-    // (no vertex offsets), so on Android the list rendered as smeared streaks
-    // (#177). The rect is still claimed above, so layout and scrolling are
-    // unchanged; an off-screen row cannot be hovered or tapped anyway.
-    if (!ImGui::IsRectVisible(p, ImVec2(p.x + w, p.y + h))) {
-        ImGui::SetCursorScreenPos(ImVec2(p.x, rowBottom));
-        ImGui::PopID();
-        return act;
-    }
-
     // Eye first - its own exclusive hit area (a row button submitted before
     // it would swallow the taps; same lesson as listRow's checkbox).
     ImGui::SetCursorScreenPos(ImVec2(p.x + indent, p.y));
@@ -963,8 +889,6 @@ TreeLeafAction treeLeaf(const char* id, const char* icon, const char* label,
         "##row", ImVec2(std::max(1.0f, w - indent - eyeW - swW), h));
     if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) act.rightClicked = true;
     const bool rowHov = ImGui::IsItemHovered();
-    if (rowHov && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-        act.doubleClicked = true;
 
     const float fillR = p.x + w - swW;   // fills stop short of the swatch
     if (selected) {
@@ -1046,14 +970,6 @@ ListRowAction listRow(const char* id, bool* checked, const char* label,
     // cur.y 673.80 vs max.y 673.00 at s = 1.7).
     const float rowBottom =
         ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y;
-
-    // Off-screen rows draw nothing - see treeLeaf (#177): the draw list is not
-    // culled for us, and a long list overflows 16-bit indices on OpenGL ES.
-    if (!ImGui::IsRectVisible(p, ImVec2(p.x + w, p.y + h))) {
-        ImGui::SetCursorScreenPos(ImVec2(p.x, rowBottom));
-        ImGui::PopID();
-        return act;
-    }
 
     // Checkbox (visibility) FIRST, with its own exclusive hit area - a row
     // button submitted before it would claim its clicks (ImGui gives the

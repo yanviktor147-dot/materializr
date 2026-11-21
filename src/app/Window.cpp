@@ -129,18 +129,8 @@ Window::Window(int width, int height, const std::string& title,
     // without the opt-in we leave SDL's synthesis ALONE: it is the only thing
     // making a touchscreen work there, and killing it while handleFingerEvent()
     // stays dormant would take a partly-working touchscreen to a dead one.
-    if (materializr::touchInputActive()) {
+    if (materializr::touchInputActive())
         SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
-        // The same for a stylus. SDL turns a pen into BOTH touch events (which
-        // handleFingerEvent drives, via SDL_PEN_TOUCHID) AND a mouse: motion
-        // while it merely hovers, plus a left-button press/release on contact.
-        // The mouse half reached ImGui as a second, desktop-style click on top
-        // of the gesture machine's tap - a tap picked and then un-picked (Multi
-        // lost its first object), a toolbar tool toggled itself off, and a
-        // hovering pen moved the mouse over the viewport. Pen touch events stay
-        // on (SDL's default), so drawing, tapping and dragging still work.
-        SDL_SetHint(SDL_HINT_PEN_MOUSE_EVENTS, "0");
-    }
 #endif
 
     // Let the screen blank/lock and the machine idle-suspend normally. A CAD
@@ -404,7 +394,6 @@ int Window::pollEvents(int waitMs) {
                 case SDL_EVENT_DROP_FILE:
                 case SDL_EVENT_QUIT:
                 case SDL_EVENT_FINGER_DOWN: case SDL_EVENT_FINGER_UP:
-                case SDL_EVENT_FINGER_CANCELED:
                 case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
                 case SDL_EVENT_WINDOW_RESIZED:
                 case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -438,20 +427,6 @@ int Window::pollEvents(int waitMs) {
             (e.type == SDL_EVENT_FINGER_DOWN || e.type == SDL_EVENT_FINGER_MOTION || e.type == SDL_EVENT_FINGER_UP)) {
             handleFingerEvent(e.type, (std::int64_t)e.tfinger.fingerID, e.tfinger.x, e.tfinger.y);
             continue;   // don't also route finger events through the backend
-        }
-        // The OS cancelled the touch (Android sends ACTION_CANCEL when a system
-        // gesture such as a three-finger swipe/screenshot claims the fingers),
-        // or the window lost focus mid-touch. No FINGER_UP follows either, so
-        // without this the dead fingers stay in m_fingers for good: the pair
-        // tracker thinks two fingers are still down (only camera movement
-        // works) and the synthetic left button never releases (every tap and
-        // button is dead until the app is restarted).
-        if (materializr::touchInputActive() &&
-            (e.type == SDL_EVENT_FINGER_CANCELED ||
-             e.type == SDL_EVENT_WINDOW_FOCUS_LOST ||
-             e.type == SDL_EVENT_WINDOW_MINIMIZED)) {
-            cancelAllFingers();
-            if (e.type == SDL_EVENT_FINGER_CANCELED) continue;
         }
 #endif
         if (e.type == SDL_EVENT_WINDOW_RESIZED ||
@@ -776,32 +751,6 @@ void Window::handleFingerEvent(unsigned type, std::int64_t id, float nx, float n
     m_panelScroll = false;
 }
 
-void Window::cancelAllFingers() {
-    ImGuiIO& io = ImGui::GetIO();
-    m_fingers.clear();
-    if (m_leftDown) {
-        // Park the cursor first so the release can't click the widget under it.
-        io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-        io.AddMouseButtonEvent(0, false);
-        m_leftDown = false;
-        m_leftReleaseWasGesture = true;
-    }
-    m_twoFinger = false;
-    m_suppressLeft = false;
-    m_twoFingerMode = 0;
-    m_holdSelect = false;
-    m_movedBeyondHold = false;
-    m_panelScroll = false;
-    m_scrollArmed = false;
-    m_sessionMaxFingers = 0;
-    m_sessionPanNet = m_sessionZoomNet = 0.0f;
-    m_panAccX = m_panAccY = m_zoomAcc = 0.0f;
-    // A cancelled touch is not a tap: nothing may fire from it later.
-    m_undoTapPending = m_redoTapPending = false;
-    m_singleTapPending = m_doubleTapPending = false;
-    m_rightClickPhase = 0;
-}
-
 void Window::updateHoldSelect() {
     if (m_holdSelect) return;
     // Only arm over the 3D canvas - a press on a slider/panel must never become a
@@ -959,12 +908,9 @@ float Window::uiScale() const {
     float s = uiScaleDetected();
     // One place, after detection, so every consumer (font atlas, style,
     // uiSz widgets, toolbar, cursor, default dock widths) sees the same number
-    // and nothing can scale on its own. --ui-scale is an exact override, so it
-    // is not multiplied. Touch mode sets its own BASE size but the user's
-    // multiplier still applies on top: a high-density tablet or a headset
-    // finds the touch-sized controls too big (or too small) and must not have
-    // to give up touch input to change that.
-    if (m_uiScaleOverride <= 0.0f)
+    // and nothing can scale on its own. Touch has its own scale and --ui-scale
+    // is an exact override, so neither is multiplied.
+    if (!materializr::touchMode() && m_uiScaleOverride <= 0.0f)
         s *= m_uiScaleUser;
     return std::min(std::max(s, 0.5f), 4.0f);
 }

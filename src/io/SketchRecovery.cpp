@@ -143,14 +143,6 @@ void clearSketchDraft() {
     clearSketchDraftAt(sketchDraftPath());
 }
 
-void clearAllOrphanSketchDrafts() {
-    // orphanedRecoverySlots() claims our own slot first, so our live draft is
-    // never in the list.
-    for (int slot : orphanedRecoverySlots())
-        clearSketchDraftAt(sketchDraftPathForSlot(slot));
-    s_candidatePath.clear();
-}
-
 void clearSketchDraftAt(const std::string& path) {
     if (path.empty()) return;
     std::error_code ec;

@@ -18,7 +18,6 @@
 #include "core/Operation.h"
 #include "core/SelectionManager.h"
 #include "modeling/DeleteOp.h"          // Items tree: body delete via History
-#include "modeling/DeleteConstructionOp.h" // plane / axis delete via History
 #include "modeling/SketchEditOp.h"      // timeline: Apply cascade targets
 #include "modeling/SketchTransformOp.h"
 #include "ui/UiTheme.h"                 // viewportTopChromeBottom
@@ -35,7 +34,6 @@
 
 #include <cfloat> // FLT_MAX (tool bar height constraint)
 #include <cstring> // strncpy (rename buffers)
-#include <functional>
 #include <imgui.h>
 #include <memory>  // make_unique (DeleteOp)
 #include <set>
@@ -64,8 +62,7 @@ const char* stepIcon(const std::string& t) {
     if (t == "shell")                      return MZ_ICON_SHELL;
     if (t == "boolean")                    return MZ_ICON_SUBTRACT;
     if (t == "split_body")                 return MZ_ICON_TRIM;
-    if (t == "delete" || t == "delete_construction")
-                                           return MZ_ICON_DELETE;
+    if (t == "delete")                     return MZ_ICON_DELETE;
     if (t == "defeature")                  return MZ_ICON_REPAIR;
     if (t == "mirror")                     return MZ_ICON_MIRROR;
     if (t == "pattern")                    return MZ_ICON_PATTERN;
@@ -135,7 +132,7 @@ void Application::renderImTouchLayout() {
     // chip, the buttons). Their rounded fill is the only chrome we want.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-    // ── Top-left: [Logo = menu] [Project name] - INDIVIDUAL boxes of
+    // ── Top-left: [Logo] [Menu] [Project name] - three INDIVIDUAL boxes of
     //    equal height (matching the top-right cluster's button boxes), on a
     //    fully transparent host window so each box carries its own fill.
     ImGui::SetNextWindowPos(ImVec2(wp.x + m, wp.y + m));
@@ -144,8 +141,24 @@ void Application::renderImTouchLayout() {
         const float bh = 44.0f * s;
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
-        // Logo box: the emblem is the menu button.
-        if (layoutui::logoMenuButton("logomenu", bh))
+        // Logo box.
+        {
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+            dl->AddRectFilled(p, ImVec2(p.x + bh, p.y + bh),
+                              ImGui::GetColorU32(touchui::rowBg()),
+                              touchui::radius(10.0f * s));
+            const float lg = 26.0f * s;
+            const ImVec2 c0(p.x + (bh - lg) * 0.5f, p.y + (bh - lg) * 0.5f);
+            dl->AddImageRounded(layoutui::logoTexture(), c0,
+                                ImVec2(c0.x + lg, c0.y + lg),
+                                ImVec2(0, 0), ImVec2(1, 1),
+                                IM_COL32_WHITE, touchui::radius(4.0f * s));
+            ImGui::Dummy(ImVec2(bh, bh));
+        }
+        ImGui::SameLine(0.0f, 8.0f * s);
+
+        // Menu box.
+        if (touchui::iconButton("menu", MZ_ICON_MENU_BARS, bh))
             ImGui::OpenPopup("##TouchOverflow");
         tip(materializr::tr("Menu: file, edit, view, help and settings"));
         renderTouchOverflowPopup();
@@ -297,27 +310,15 @@ void Application::renderImTouchLayout() {
     //    plus press-and-hold context menus (rename / delete / move-to-folder)
     //    and folder grouping, mirroring ItemsPanel but touch-native.
     m_imTouchTreeHovered = false;   // fed to the long-press gate every frame
-    if (!(m_imTouchTree && m_document)) m_imTouchTreeEngaged = false;   // hidden: start translucent next time
     if (m_imTouchTree && m_document) {
-        // Flush to the right edge, in the band BETWEEN the fixed chrome: below
-        // the top cluster and the ViewCube (offset 68 + the cube and its roll arrow)
-        // and above the bottom-corner FAB. It used to be centred and allowed to
-        // grow to nearly the full height, so a long body list (a 20-copy
-        // pattern) slid over the cluster, the cube and the FAB. It now stops at
-        // that band and scrolls inside it.
-        const float treeTop    = 240.0f * s;   // clears the cube AND its lower roll arrow (measured on the TB330FU)
-        const float treeBottom = 104.0f * s;
-        const float treeMaxH   = std::max(ws.y - treeTop - treeBottom, 120.0f * s);
+        // Flush to the right edge, below the top cluster's reach.
         ImGui::SetNextWindowPos(
-            ImVec2(wp.x + ws.x - m, wp.y + treeTop),
-            ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+            ImVec2(wp.x + ws.x - m, wp.y + ws.y * 0.5f),
+            ImGuiCond_Always, ImVec2(1.0f, 0.5f));
         const float treeW = 260.0f * s;
         ImGui::SetNextWindowSizeConstraints(ImVec2(treeW, 0),
-                                            ImVec2(treeW, treeMaxH));
-        // Fusion-browser translucency while idle; nearly opaque once the user
-        // has scrolled or pressed in it (see m_imTouchTreeEngaged below), so a
-        // long list is readable over the model.
-        ImGui::SetNextWindowBgAlpha(m_imTouchTreeEngaged ? 0.94f : 0.25f);
+                                            ImVec2(treeW, ws.y - 2.0f * m));
+        ImGui::SetNextWindowBgAlpha(0.25f);   // Fusion-browser translucency
         if (ImGui::Begin("##LiteTree", nullptr,
                          kFloat & ~ImGuiWindowFlags_NoScrollbar)) {
             // Report hover (incl. while a row is the active item) so a
@@ -325,24 +326,6 @@ void Application::renderImTouchLayout() {
             m_imTouchTreeHovered = ImGui::IsWindowHovered(
                 ImGuiHoveredFlags_RootAndChildWindows |
                 ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-            {
-                // Engage on a press inside the tree or any scroll of it (wheel
-                // or a touch drag); release on a press anywhere else. A popup
-                // opened from the tree (colour, row menu) is part of using it,
-                // so a press while one is open leaves the state alone.
-                const ImGuiIO& io = ImGui::GetIO();
-                const bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
-                                     ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
-                                     ImGui::IsMouseClicked(ImGuiMouseButton_Middle);
-                const float scrollY = ImGui::GetScrollY();
-                const bool scrolled = std::abs(scrollY - m_imTouchTreeScrollY) > 0.5f ||
-                                      (m_imTouchTreeHovered && io.MouseWheel != 0.0f);
-                m_imTouchTreeScrollY = scrollY;
-                if (scrolled || (pressed && m_imTouchTreeHovered))
-                    m_imTouchTreeEngaged = true;
-                else if (pressed && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId))
-                    m_imTouchTreeEngaged = false;
-            }
             // (Project name intentionally omitted here - the top-left chip
             // already shows it; dropping the browser's root row reclaims space.)
 
@@ -361,8 +344,7 @@ void Application::renderImTouchLayout() {
             // like the Items panel's rows; other kinds select plainly.
             auto pick = [&](SelectionEntry entry, bool multiOk) {
                 if (!m_selection) return;
-                if (multiOk && (m_multiSelectToggle || ImGui::GetIO().KeyCtrl))
-                    m_selection->toggleSelection(entry);
+                if (multiOk && m_multiSelectToggle) m_selection->toggleSelection(entry);
                 else                                m_selection->select(entry);
                 if (entry.type == SelectionType::Body)
                     m_selection->setNavigationOnly(true);
@@ -583,17 +565,7 @@ void Application::renderImTouchLayout() {
                             SelectionEntry e;
                             e.type = SelectionType::Sketch;
                             e.sketchId = id;
-                            // multiOk: Multi / Ctrl add to the selection, like
-                            // bodies here and like the Items panel.
-                            pick(e, /*multiOk=*/true);
-                        }
-                        // Double-tap OPENS the sketch for editing, as in the
-                        // other layouts. The one being drawn can't be re-entered.
-                        if (act.doubleClicked &&
-                            !(m_inSketchMode && id == m_activeSketchId)) {
-                            editSketch(id);
-                            ImGui::PopID();
-                            break;   // the edit changed state under the id list
+                            pick(e, /*multiOk=*/false);
                         }
                         bool sgone = false;
                         if (act.rightClicked) ImGui::OpenPopup("sketchCtx");
@@ -649,7 +621,7 @@ void Application::renderImTouchLayout() {
                             if (ImGui::MenuItem(materializr::tr("Rename")))
                                 startRename(4000000 + id, label);
                             if (ImGui::MenuItem(materializr::tr("Delete"))) {
-                                deleteConstructionEntity(m_history, *m_document, false, id);
+                                m_document->removePlane(id);
                                 if (m_selection) m_selection->clear();
                                 cgone = true;
                             }
@@ -680,7 +652,7 @@ void Application::renderImTouchLayout() {
                             if (ImGui::MenuItem(materializr::tr("Rename")))
                                 startRename(5000000 + id, label);
                             if (ImGui::MenuItem(materializr::tr("Delete"))) {
-                                deleteConstructionEntity(m_history, *m_document, true, id);
+                                m_document->removeAxis(id);
                                 if (m_selection) m_selection->clear();
                                 cgone = true;
                             }
@@ -804,7 +776,7 @@ void Application::renderImTouchLayout() {
             // repeated taps can walk the levels, and Polygon opens its own
             // nested sides popup which closes the whole stack on pick).
             auto fire = [&](const Toolbar::RailTool& tool, bool clicked,
-                            bool inPopup, bool inMenuZone = false) {
+                            bool inPopup) {
                 if (tool.pluginIndex >= 0) {
                     if (clicked) {
                         m_toolbar->fireRailPlugin(tool.pluginIndex);
@@ -815,7 +787,7 @@ void Application::renderImTouchLayout() {
                 } else if (tool.action == ToolAction::Rectangle ||
                            tool.action == ToolAction::Circle) {
                     renderRailDrawOriginPopup(tool.action == ToolAction::Rectangle,
-                                              tool.active, clicked, inMenuZone);
+                                              tool.active, clicked);
                 } else if (clicked) {
                     handleToolAction(static_cast<int>(tool.action));
                     if (inPopup &&
@@ -823,18 +795,13 @@ void Application::renderImTouchLayout() {
                         ImGui::CloseCurrentPopup();
                 }
             };
-            auto flatButton = [&](const Toolbar::RailTool& tool, const std::string& key) {
-                // Keyed by entry, not position: the id has to follow the
-                // button when the user drags it to another slot.
-                ImGui::PushID(key.c_str());
-                bool inZone = false;
-                m_railOrder.beginEntry();
-                bool clicked = touchui::railButton(
+            auto flatButton = [&](const Toolbar::RailTool& tool, int id) {
+                ImGui::PushID(id); // labels can repeat across groups
+                const bool clicked = touchui::railButton(
                     tool.label, tool.icon, tr(tool.label), tool.active, 64.0f * s,
-                    false, tool.menu, &inZone);
-                clicked = m_railOrder.item(key, clicked);
+                    false, tool.menu);
                 tip(materializr::tr(tool.tip));
-                fire(tool, clicked, /*inPopup=*/false, inZone);
+                fire(tool, clicked, /*inPopup=*/false);
                 ImGui::PopID();
             };
             // Group button + flyout: the button wears the group's ACTIVE
@@ -848,65 +815,27 @@ void Application::renderImTouchLayout() {
                 const Toolbar::RailTool* activeTool = nullptr;
                 for (const auto* t : members)
                     if (t->active) { activeTool = t; break; }
-                m_railOrder.beginEntry();
-                bool gClicked = touchui::railButton(id,
+                if (touchui::railButton(id,
                                         activeTool ? activeTool->icon : groupIcon,
                                         materializr::tr(activeTool ? activeTool->label
                                                                    : groupLabel),
                                         activeTool != nullptr, 64.0f * s,
-                                        false, /*hasMenu=*/true);
-                gClicked = m_railOrder.item(std::string("group:") + id, gClicked);
-                if (gClicked) ImGui::OpenPopup(popupId);
+                                        false, /*hasMenu=*/true))
+                    ImGui::OpenPopup(popupId);
                 tip(materializr::tr(groupTip));
                 if (ImGui::BeginPopup(popupId)) {
                     int idx = 0;
                     for (const auto* t : members) {
                         if (idx % 4 != 0) ImGui::SameLine(0.0f, 6.0f * s);
                         ImGui::PushID(idx++);
-                        bool inZone = false;
                         const bool clicked = touchui::railButton(
-                            t->label, t->icon, tr(t->label), t->active, 64.0f * s,
-                            false, t->menu, &inZone);
+                            t->label, t->icon, tr(t->label), t->active, 64.0f * s);
                         tip(materializr::tr(t->tip));
-                        fire(*t, clicked, /*inPopup=*/true, inZone);
+                        fire(*t, clicked, /*inPopup=*/true);
                         ImGui::PopID();
                     }
                     ImGui::EndPopup();
                 }
-            };
-
-            // Every rail button (a flat tool or a group flyout) is an entry the
-            // user can drag into their own order (long-press, see RailOrder).
-            // The branches below queue entries in the default order; flushRail
-            // draws them in the saved / being-dragged order.
-            struct RailEntry { std::string key; std::function<void()> draw; };
-            std::vector<RailEntry> entries;
-            std::set<std::string> seenKeys;
-            auto queueFlat = [&](const Toolbar::RailTool& t) {
-                std::string k = std::string(t.pluginIndex >= 0 ? "p:" : "a:") +
-                                (t.label ? t.label : "");
-                for (int n = 2; !seenKeys.insert(k).second; ++n)
-                    k = k.substr(0, k.find('#')) + "#" + std::to_string(n);
-                const Toolbar::RailTool* tp = &t;
-                entries.push_back({ k, [&flatButton, tp, k] { flatButton(*tp, k); } });
-            };
-            auto queueGroup = [&](const char* id, const char* popupId,
-                                  const char* groupIcon, const char* groupLabel,
-                                  const char* groupTip,
-                                  const std::vector<const Toolbar::RailTool*>& members) {
-                if (members.empty()) return;
-                entries.push_back({ std::string("group:") + id,
-                    [&group, id, popupId, groupIcon, groupLabel, groupTip, &members] {
-                        group(id, popupId, groupIcon, groupLabel, groupTip, members);
-                    } });
-            };
-            auto flushRail = [&] {
-                std::vector<std::string> keys;
-                for (const auto& e : entries) keys.push_back(e.key);
-                const auto order = m_railOrder.arrange(
-                    std::string("imtouch/") + m_toolbar->contextKey(), keys);
-                for (int oi : order) entries[oi].draw();
-                if (m_railOrder.takeChanged()) saveAppSettings();
             };
 
             if (!m_inSketchMode) {
@@ -921,6 +850,7 @@ void Application::renderImTouchLayout() {
                 // the flyout holds whichever are usable right now - and the
                 // group button doesn't appear at all when none are.
                 std::vector<const Toolbar::RailTool*> multiply, transform, repair;
+                int railIdx = 0;
                 for (const auto& t : tools) {
                     if (t.pluginIndex >= 0 && t.label) {
                         if (std::strcmp(t.label, "Linear") == 0 ||
@@ -943,20 +873,19 @@ void Application::renderImTouchLayout() {
                                t.action == ToolAction::RemoveFace) {
                         repair.push_back(&t); continue;
                     }
-                    queueFlat(t);
+                    flatButton(t, railIdx++);
                 }
-                queueGroup("transformGroup", "##bodyTransform", MZ_ICON_MOVE,
+                group("transformGroup", "##bodyTransform", MZ_ICON_MOVE,
                       "Transform", "Move, rotate or scale the selection",
                       transform);
-                queueGroup("multiplyGroup", "##bodyMultiply", MZ_ICON_COPY,
+                group("multiplyGroup", "##bodyMultiply", MZ_ICON_COPY,
                       "Multiply", "Copy, mirror, pattern or split the selection",
                       multiply);
-                queueGroup("repairGroup", "##bodyRepair", MZ_ICON_REPAIR,
+                group("repairGroup", "##bodyRepair", MZ_ICON_REPAIR,
                       "Repair", "Fix up geometry: fill an opening, stitch "
                       "surfaces into a solid, merge split faces, or take a "
                       "feature back off",
                       repair);
-                flushRail();
             } else {
                 // Sketch mode: the flat catalogue is ~19 buttons - a screen
                 // and a half of scrolling. The DRAWING tools stay flat (they're
@@ -968,6 +897,7 @@ void Application::renderImTouchLayout() {
                 // in catalogue order, so anything unrecognised (future tools)
                 // also lands flat and can't silently vanish from the rail.
                 std::vector<const Toolbar::RailTool*> modify, aids, importers;
+                int railIdx = 0;
                 for (const auto& t : tools) {
                     if (t.pluginIndex >= 0) { modify.push_back(&t); continue; }
                     switch (t.action) {
@@ -979,8 +909,6 @@ void Application::renderImTouchLayout() {
                         importers.push_back(&t); break;
                     case ToolAction::Trim:
                     case ToolAction::SketchOffset:
-                    case ToolAction::SketchReference:
-                    case ToolAction::SketchCorner:
                     case ToolAction::SketchFill:
                     case ToolAction::SketchCopy:
                     case ToolAction::SketchMirror:
@@ -992,21 +920,20 @@ void Application::renderImTouchLayout() {
                     case ToolAction::LookAtSketch:
                         aids.push_back(&t); break;
                     default:
-                        queueFlat(t); break;
+                        flatButton(t, railIdx++); break;
                     }
                 }
-                queueGroup("modifyGroup", "##sketchModify", MZ_ICON_TRIM, "Modify",
+                group("modifyGroup", "##sketchModify", MZ_ICON_TRIM, "Modify",
                       "Modify tools: trim, offset, fill, copy, mirror, linear "
                       "and circular patterns",
                       modify);
-                queueGroup("importGroup", "##sketchImport", MZ_ICON_SVG, "Import",
+                group("importGroup", "##sketchImport", MZ_ICON_SVG, "Import",
                       "Bring outside artwork into the sketch: an SVG outline or "
                       "an aerofoil section",
                       importers);
-                queueGroup("aidsGroup", "##sketchAids", MZ_ICON_MORE, "More",
+                group("aidsGroup", "##sketchAids", MZ_ICON_MORE, "More",
                       "Drawing guides level, measure, look at the sketch plane",
                       aids);
-                flushRail();
             }
         }
     }

@@ -50,9 +50,6 @@ public:
 
     /// Frame the camera to fit a bounding box in view.
     void zoomToFit(glm::vec3 min, glm::vec3 max);
-    /// zoomToFit that glides there (animateTo) instead of teleporting: same view
-    /// direction, same framing at the end - only the way it arrives differs.
-    void animateToFit(glm::vec3 min, glm::vec3 max, float seconds = 0.35f);
 
     /// Get the current camera position.
     glm::vec3 getPosition() const { return m_position; }
@@ -132,17 +129,6 @@ public:
     /// Half-height (world units) of the ortho view box. Width is derived from aspect.
     void setOrthoSize(float halfHeight) { m_orthoSize = halfHeight; }
     float getOrthoSize() const { return m_orthoSize; }
-    // Smallest half-height an orthographic zoom will go to (world units, mm).
-    // Zooming past it stops: finer than this the grid labels and picking run
-    // out of float precision long before there is anything left to see.
-    static constexpr float kMinOrthoSize = 0.02f;
-    // ...and the largest (a kilometre). Without a ceiling a long run of zoom-out
-    // steps multiplies the view up to infinity and takes the matrices with it.
-    static constexpr float kMaxOrthoSize = 1.0e6f;
-    // The farthest a perspective camera may sit from what it looks at: a thousand
-    // kilometres (a country). Hyper-scrolling out of a wall used to fly the camera off
-    // to where the grid broke up and the model could not be found again.
-    static constexpr float kMaxPerspectiveDistance = 1.0e9f;
 
     /// When true (default), orbiting is a level turntable around world up (the
     /// horizon never rolls). When false, orbiting is a free trackball.

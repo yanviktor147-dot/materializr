@@ -1,5 +1,4 @@
 #include "LoftOp.h"
-#include "Sketch.h"
 #include <cctype>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
@@ -412,101 +411,18 @@ void describeSections(const std::vector<TopoDS_Wire>& profiles) {
 LoftOp::LoftOp() = default;
 
 void LoftOp::addProfile(const TopoDS_Wire& wire) {
-    addProfile(wire, {}, -1, false);
+    m_profiles.push_back(wire);
+    m_holeProfiles.emplace_back(); // no holes for this profile
 }
 
 void LoftOp::addProfile(const TopoDS_Wire& outer, const std::vector<TopoDS_Wire>& holes) {
-    addProfile(outer, holes, -1, false);
-}
-
-void LoftOp::addProfile(const TopoDS_Wire& outer, const std::vector<TopoDS_Wire>& holes,
-                        int sketchId, bool reversed) {
     m_profiles.push_back(outer);
     m_holeProfiles.push_back(holes);
-    m_profileSketchIds.push_back(sketchId);
-    m_profileReversed.push_back(reversed ? 1 : 0);
 }
 
 void LoftOp::clearProfiles() {
     m_profiles.clear();
     m_holeProfiles.clear();
-    m_profileSketchIds.clear();
-    m_profileReversed.clear();
-}
-
-TopoDS_Wire LoftOp::sectionFromSketch(materializr::Sketch* sk,
-                                      std::vector<TopoDS_Wire>& holesOut,
-                                      bool* fromRegionOut) {
-    holesOut.clear();
-    if (fromRegionOut) *fromRegionOut = false;
-    if (!sk) return {};
-    auto regions = sk->buildRegions();
-    if (!regions.empty()) {
-        // A sketch started on a body's face also carries the REST of that face
-        // as a region (everything outside the drawn shape), and being the biggest
-        // it won the "outermost" pick below - so a loft from a rectangle drawn on
-        // a cylinder's top took the cylinder's whole circle as its base, and the
-        // loft grew from the body it was never told about. Only the regions the
-        // user DREW are candidates; with none (a bare host face) all of them are.
-        std::vector<int> candidates = sk->drawnRegions(regions);
-        if (candidates.empty())
-            for (size_t i = 0; i < regions.size(); ++i) candidates.push_back(static_cast<int>(i));
-        size_t best = static_cast<size_t>(candidates.front());
-        double bestDiag = -1.0;
-        for (int ci : candidates) {
-            const size_t i = static_cast<size_t>(ci);
-            if (regions[i].outerWire.IsNull()) continue;
-            Bnd_Box bb;
-            BRepBndLib::Add(regions[i].outerWire, bb);
-            if (bb.IsVoid()) continue;
-            double x0, y0, z0, x1, y1, z1;
-            bb.Get(x0, y0, z0, x1, y1, z1);
-            double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
-            double diag = dx * dx + dy * dy + dz * dz;
-            if (diag > bestDiag) { bestDiag = diag; best = i; }
-        }
-        holesOut = regions[best].holeWires;
-        if (fromRegionOut) *fromRegionOut = true;   // regions are closed loops
-        return regions[best].outerWire;
-    }
-    auto wires = sk->buildWires();
-    if (!wires.empty()) return wires[0];
-    return {};
-}
-
-bool LoftOp::usesSketch(int sketchId) const {
-    for (int id : m_profileSketchIds)
-        if (id >= 0 && id == sketchId) return true;
-    return false;
-}
-
-bool LoftOp::rebuildFromSketches(Document& doc) {
-    if (m_profileSketchIds.size() != m_profiles.size()) return false;
-    std::vector<TopoDS_Wire> outers = m_profiles;
-    std::vector<std::vector<TopoDS_Wire>> holes = m_holeProfiles;
-    bool any = false;
-    for (size_t i = 0; i < m_profiles.size(); ++i) {
-        const int sid = m_profileSketchIds[i];
-        if (sid < 0) continue;
-        std::shared_ptr<materializr::Sketch> sk = doc.cascadeSketchOverride(sid);
-        if (!sk) sk = doc.getSketch(sid);
-        if (!sk) return false;
-        bool closed = false;
-        std::vector<TopoDS_Wire> h;
-        TopoDS_Wire w = sectionFromSketch(sk.get(), h, &closed);
-        if (w.IsNull() || !closed) return false;
-        if (m_profileReversed[i]) {
-            w = TopoDS::Wire(w.Reversed());
-            for (auto& hw : h) hw = TopoDS::Wire(hw.Reversed());
-        }
-        outers[i] = w;
-        holes[i] = std::move(h);
-        any = true;
-    }
-    if (!any) return false;
-    m_profiles = std::move(outers);
-    m_holeProfiles = std::move(holes);
-    return true;
 }
 
 void LoftOp::setSolid(bool solid) {
@@ -723,16 +639,6 @@ std::string LoftOp::serializeParams() const {
                        ";ruled=" + std::to_string(m_ruled ? 1 : 0) +
                        ";created=" + std::to_string(m_createdBodyId) +
                        ";np=" + std::to_string(m_profiles.size());
-    // Sketch sources (-1 = a face section) and Flip state, per section, so the
-    // loft follows its sketches after a reload.
-    {
-        std::string ids, rev;
-        for (size_t i = 0; i < m_profiles.size(); ++i) {
-            ids += (i ? "," : "") + std::to_string(i < m_profileSketchIds.size() ? m_profileSketchIds[i] : -1);
-            rev += (i ? "," : "") + std::string(i < m_profileReversed.size() && m_profileReversed[i] ? "1" : "0");
-        }
-        blob += ";psk=" + ids + ";prev=" + rev;
-    }
     BRep_Builder bb;
     TopoDS_Compound comp;
     bb.MakeCompound(comp);
@@ -752,10 +658,6 @@ std::string LoftOp::serializeParams() const {
 bool LoftOp::deserializeParams(const std::string& blob) {
     m_profiles.clear();
     m_holeProfiles.clear();
-    m_profileSketchIds.clear();
-    m_profileReversed.clear();
-    std::vector<int> srcIds;
-    std::vector<char> srcRev;
     materializr::HoleCountReader holeReader;
     int np = 0;
     bool any = false;
@@ -810,14 +712,6 @@ bool LoftOp::deserializeParams(const std::string& blob) {
         else if (key == "ruled")   { m_ruled = val == "1"; any = true; }
         else if (key == "created") { m_createdBodyId = std::atoi(val.c_str()); any = true; }
         else if (key == "np")      { np = std::atoi(val.c_str()); any = true; }
-        else if (key == "psk" || key == "prev") {
-            std::istringstream ls(val);
-            std::string tok;
-            while (std::getline(ls, tok, ',')) {
-                if (key == "psk") srcIds.push_back(std::atoi(tok.c_str()));
-                else              srcRev.push_back(tok == "1" ? 1 : 0);
-            }
-        }
         // h<N>: N comes from the file and SIZES the vector below, so it is bounded
         // before the resize. This site was weaker than BoundaryFillOp's twin - it
         // had no digit guard at all, so any "h*" key reached std::atoi.
@@ -830,19 +724,11 @@ bool LoftOp::deserializeParams(const std::string& blob) {
         }
         pos = end + 1;
     }
-    // Older saves carry no sources: every section is then self-contained.
-    srcIds.resize(m_profiles.size(), -1);
-    srcRev.resize(m_profiles.size(), 0);
-    m_profileSketchIds = std::move(srcIds);
-    m_profileReversed = std::move(srcRev);
     return any && static_cast<int>(m_profiles.size()) == np && np >= 2;
 }
 
-bool LoftOp::rehydrateFromReload(const ReloadState& state, Document& doc) {
+bool LoftOp::rehydrateFromReload(const ReloadState& state, Document&) {
     if (m_profiles.size() < 2) return false;
-    // Sketch-sourced: follow the sketches as they are now (the stored copy is
-    // the fallback if one has gone), as Sweep does.
-    rebuildFromSketches(doc);
     if (m_createdBodyId < 0 && !state.created.empty())
         m_createdBodyId = state.created.front();
     return true;   // profiles are self-contained; execute() re-lofts them

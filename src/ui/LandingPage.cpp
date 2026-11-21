@@ -40,15 +40,6 @@ void LandingPage::setEntries(std::vector<Entry> entries) {
     m_entries = std::move(entries);
 }
 
-void LandingPage::removeEntry(const std::string& ref) {
-    for (auto it = m_entries.begin(); it != m_entries.end(); ++it) {
-        if (it->ref != ref) continue;
-        if (it->tex) { GLuint t = it->tex; glDeleteTextures(1, &t); }
-        m_entries.erase(it);
-        return;
-    }
-}
-
 void LandingPage::setEntryTexture(const std::string& ref, unsigned int tex) {
     if (!tex) return;
     for (auto& e : m_entries) {
@@ -82,7 +73,7 @@ std::string fitLabel(const std::string& s, float maxW) {
 }
 
 // What a tile reported this frame: a plain click, or a context-menu pick.
-enum class TileAct { None, Click, CtxOpen, CtxStep, CtxStl, CtxParts, CtxDelete };
+enum class TileAct { None, Click, CtxOpen, CtxStep, CtxStl, CtxParts };
 
 // One tile: label centred above a square preview area. `tex` = 0 draws the
 // placeholder glyph instead of an image. `withContext` adds the right-click
@@ -113,9 +104,6 @@ TileAct tile(const char* id, const std::string& label, unsigned int tex,
         // no cross-file parametrics (see Application::exportRecentProjectAs).
         if (ImGui::MenuItem(materializr::tr("Export as STEP..."))) act = TileAct::CtxStep;
         if (ImGui::MenuItem(materializr::tr("Export as STL..."))) act = TileAct::CtxStl;
-        ImGui::Separator();
-        // Removes the file itself (after a confirmation the caller shows).
-        if (ImGui::MenuItem(materializr::tr("Delete project..."))) act = TileAct::CtxDelete;
         ImGui::EndPopup();
     }
 
@@ -190,53 +178,40 @@ LandingPage::Action LandingPage::render() {
     }
     ImGui::PopStyleVar();
 
-    // ── Header: logo + actions left, app identity right ──────────────────
-    // Same side as the menu in an open project, so the first thing a user
-    // reaches for is where their hand already expects it.
-    {
-        const ImGuiStyle& style = ImGui::GetStyle();
-        if (m_logoTex) {
-            const float logoSz = ImGui::GetTextLineHeight() * 1.5f;
-            ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(m_logoTex)),
-                         ImVec2(logoSz, logoSz));
-            ImGui::SameLine();
-        }
-        if (ImGui::Button((std::string(ICON_IC_FOLDER "  ") + materializr::tr("Open File...")).c_str()))
-            action.type = ActionType::OpenFileDialog;
+    // ── Header: logo + app identity left, actions right ──────────────────
+    if (m_logoTex) {
+        const float logoSz = ImGui::GetTextLineHeight() * 1.5f;
+        ImGui::Image(static_cast<ImTextureID>(static_cast<intptr_t>(m_logoTex)),
+                     ImVec2(logoSz, logoSz));
         ImGui::SameLine();
-        if (ImGui::Button((std::string(ICON_IC_SETTINGS "  ") + materializr::tr("Settings")).c_str()))
-            action.type = ActionType::OpenSettings;
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", materializr::tr("Settings"));
-        ImGui::SameLine();
-        if (ImGui::Button((std::string(ICON_IC_HELP_CIRCLE "  ") + materializr::tr("Help")).c_str()))
-            action.type = ActionType::OpenHelp;
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", materializr::tr("User guide"));
-#if !defined(MZ_IOS)
-        // Quit from the home screen. Before this the only way out was to open
-        // a project and exit from there (iOS apps don't quit themselves).
-        ImGui::SameLine();
-        if (ImGui::Button((std::string(ICON_IC_LOG_OUT "  ") + materializr::tr("Exit")).c_str()))
-            action.type = ActionType::Exit;
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", materializr::tr("Exit"));
-#endif
+    }
+    ImGui::SetWindowFontScale(1.5f);
+    ImGui::TextColored(accentText(), "%s", materializr::tr("Materializr"));
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::SameLine();
+    ImGui::TextColored(dimText(), "v" MATERIALIZR_VERSION);
 
-        // Right-aligned block: name, version, and the dismiss button.
-        const char* name = materializr::tr("Materializr");
-        const char* ver = "v" MATERIALIZR_VERSION;
+    {
+        const char* openLbl = ICON_IC_FOLDER "  Open File...";
+        const char* helpLbl = ICON_IC_HELP_CIRCLE "  Help";
+        const char* gearLbl = ICON_IC_SETTINGS "  Settings";
         const char* backLbl = ICON_IC_XMARK;
-        ImGui::SetWindowFontScale(1.5f);
-        const float nameW = ImGui::CalcTextSize(name).x;
-        ImGui::SetWindowFontScale(1.0f);
-        float rightW = nameW + style.ItemSpacing.x + ImGui::CalcTextSize(ver).x;
-        if (m_canDismiss)
-            rightW += style.ItemSpacing.x + ImGui::CalcTextSize(backLbl).x +
-                      style.FramePadding.x * 2.0f;
+        const ImGuiStyle& style = ImGui::GetStyle();
+        int nBtns = m_canDismiss ? 4 : 3;
+        float rightW = ImGui::CalcTextSize(openLbl).x +
+                       ImGui::CalcTextSize(helpLbl).x +
+                       ImGui::CalcTextSize(gearLbl).x +
+                       (m_canDismiss ? ImGui::CalcTextSize(backLbl).x : 0.0f) +
+                       style.FramePadding.x * 2.0f * nBtns +
+                       style.ItemSpacing.x * (nBtns - 1);
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - rightW);
-        ImGui::SetWindowFontScale(1.5f);
-        ImGui::TextColored(accentText(), "%s", name);
-        ImGui::SetWindowFontScale(1.0f);
+        if (ImGui::Button(openLbl)) action.type = ActionType::OpenFileDialog;
         ImGui::SameLine();
-        ImGui::TextColored(dimText(), "%s", ver);
+        if (ImGui::Button(helpLbl)) action.type = ActionType::OpenHelp;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", materializr::tr("User guide"));
+        ImGui::SameLine();
+        if (ImGui::Button(gearLbl)) action.type = ActionType::OpenSettings;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", materializr::tr("Settings"));
         if (m_canDismiss) {
             ImGui::SameLine();
             if (ImGui::Button(backLbl)) action.type = ActionType::Dismiss;
@@ -247,41 +222,6 @@ LandingPage::Action LandingPage::render() {
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-
-    // ── Open projects ────────────────────────────────────────────────────
-    // What is already open in a tab, one click to go back to it. Without this
-    // the page gave no sign anything was open (#184).
-    if (!m_openTabs.empty()) {
-        ImGui::TextColored(accentText(), "%s", materializr::tr("Open projects"));
-        const ImGuiStyle& style = ImGui::GetStyle();
-        const float rowRight = ImGui::GetWindowContentRegionMax().x;
-        for (size_t i = 0; i < m_openTabs.size(); ++i) {
-            const OpenTab& t = m_openTabs[i];
-            std::string label = fitLabel(t.name, uiW(260.0f));
-            if (t.dirty) label += " \xe2\x80\xa2";
-            if (t.active) label = std::string(ICON_IC_FOLDER "  ") + label;
-            ImGui::PushID(static_cast<int>(i) + 100000);
-            // Wrap to a new line instead of running off the page.
-            const float w = ImGui::CalcTextSize(label.c_str()).x + style.FramePadding.x * 2.0f;
-            if (i > 0 && ImGui::GetItemRectMax().x + style.ItemSpacing.x + w <=
-                             ImGui::GetWindowPos().x + rowRight)
-                ImGui::SameLine();
-            if (t.active)
-                ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-            if (ImGui::Button(label.c_str())) {
-                action.type = ActionType::SwitchTab;
-                action.tab = t.index;
-                action.name = t.name;
-            }
-            if (t.active) ImGui::PopStyleColor();
-            if (t.active && ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", materializr::tr("Back to the open project"));
-            ImGui::PopID();
-        }
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-    }
 
     // ── The grid ─────────────────────────────────────────────────────────
     ImGui::BeginChild("##LandingGrid", ImVec2(0, 0), false);
@@ -297,7 +237,7 @@ LandingPage::Action LandingPage::render() {
         else col = 0;
     };
 
-    if (tile("new", materializr::tr("New Project"), 0, ICON_IC_PLUS, tileW, previewH,
+    if (tile("new", "New Project", 0, ICON_IC_PLUS, tileW, previewH,
              "Start an empty project", false) == TileAct::Click)
         action.type = ActionType::NewProject;
     nextCell();
@@ -316,7 +256,6 @@ LandingPage::Action LandingPage::render() {
             case TileAct::CtxStep:  action.type = ActionType::ExportStep; break;
             case TileAct::CtxStl:   action.type = ActionType::ExportStl; break;
             case TileAct::CtxParts: action.type = ActionType::ImportParts; break;
-            case TileAct::CtxDelete: action.type = ActionType::DeleteEntry; break;
             case TileAct::None:     break;
             }
         }

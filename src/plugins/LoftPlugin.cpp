@@ -80,14 +80,12 @@ REGISTER_PLUGIN(Loft, [](materializr::PluginContext& ctx) {
         "GUIDED MODE: select ONE closed profile plus 1-2 OPEN curves and the "
         "profile is swept up along them - draw each curve as a side "
         "silhouette rising from the base (a slanted line = straight taper, "
-        "an arc = rounded side). Strokes past the peak are ignored. The shape "
-        "grows and shrinks to the curve but stays centred over its base - it "
-        "does not travel along it. To make a shape FOLLOW a path, use Sweep.\n\n"
+        "an arc = rounded side). Strokes past the peak are ignored.\n\n"
         "Best results when the profiles sit on PARALLEL planes with similar "
         "topology (all rectangles, all circles, etc.). Profiles on "
         "perpendicular planes or with very different vertex counts produce a "
         "tent / pyramid surface - that's the loft algorithm being honest, not "
-        "a bug. For floor-to-vertical transitions, Sweep along a guide curve "
+        "a bug. For floor-to-vertical transitions, a Sweep along a guide curve "
         "is usually what you want instead.\n\n"
         "Sections can be SKETCHES or FACES -- pick two faces to loft straight "
         "between them, which avoids the profile-building step entirely.";
@@ -95,26 +93,6 @@ REGISTER_PLUGIN(Loft, [](materializr::PluginContext& ctx) {
     ctx.registerToolbarButton({"Loft", "Loft",
         materializr::SelectionContext::HasSketches, 400,
         action, nullptr, tooltip});
-
-    // Sweep: a closed profile along a path, constant section - the pipe a loft
-    // cannot make. Same selection contexts as Loft; Application::beginSweep sorts
-    // the selected sketches into profile and path.
-    auto sweepAction = [](materializr::PluginContext& c) {
-        c.requestInteractiveOp(materializr::InteractiveOp::Sweep);
-    };
-    const char* sweepTip =
-        "Sweep a closed profile along a path into a tube or rail of constant "
-        "section. Select two sketches - the closed profile (a circle, say) and "
-        "the open curve to follow - then click Sweep.\n\n"
-        "The profile does not have to touch the path or sit square to it: it is "
-        "carried to the nearest end of the path and turned square to it. Use "
-        "Loft instead when the shape should grow or shrink along the way.";
-    ctx.registerToolbarButton({"Sweep", "Sweep",
-        materializr::SelectionContext::HasSketches, 410,
-        sweepAction, nullptr, sweepTip});
-    ctx.registerToolbarButton({"Sweep", "Sweep",
-        materializr::SelectionContext::HasSketchRegions, 410,
-        sweepAction, nullptr, sweepTip});
 
     ctx.registerToolbarButton({"Loft", "Loft",
         materializr::SelectionContext::HasSketchRegions, 400,

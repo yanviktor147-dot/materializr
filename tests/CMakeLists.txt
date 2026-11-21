@@ -43,11 +43,9 @@ add_library(materializr_core STATIC
     ${CMAKE_SOURCE_DIR}/src/modeling/AirfoilImport.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/SketchTool.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/SketchOffset.cpp
-    ${CMAKE_SOURCE_DIR}/src/modeling/PlaneReferences.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/SketchEditOp.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/DuplicateSketchOp.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/DeleteSketchOp.cpp
-    ${CMAKE_SOURCE_DIR}/src/modeling/DeleteConstructionOp.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/MoveHoleOp.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/SketchSolver.cpp
     ${CMAKE_SOURCE_DIR}/src/modeling/Mate.cpp
@@ -296,11 +294,6 @@ add_executable(test_extrude_recovered_profile test_extrude_recovered_profile.cpp
 target_link_libraries(test_extrude_recovered_profile PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_extrude_recovered_profile COMMAND test_extrude_recovered_profile)
 
-# test_project_wrap_orientation - sketch wrapped on a cylinder is not mirrored
-add_executable(test_project_wrap_orientation test_project_wrap_orientation.cpp)
-target_link_libraries(test_project_wrap_orientation PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_project_wrap_orientation COMMAND test_project_wrap_orientation)
-
 # test_length_edit - the transactions behind every length widget (no ImGui)
 add_executable(test_length_edit test_length_edit.cpp)
 target_link_libraries(test_length_edit PRIVATE materializr_core gtest gtest_main)
@@ -504,31 +497,6 @@ add_executable(test_sketch_select_delete_polygon test_sketch_select_delete_polyg
 target_link_libraries(test_sketch_select_delete_polygon PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_sketch_select_delete_polygon COMMAND test_sketch_select_delete_polygon)
 
-# test_sketch_copy_elements - sketch Copy duplicates every element type, not just points and lines (#182)
-add_executable(test_sketch_copy_elements test_sketch_copy_elements.cpp)
-target_link_libraries(test_sketch_copy_elements PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_sketch_copy_elements COMMAND test_sketch_copy_elements)
-
-# test_arc_pick_zone - an arc is picked along the arc itself, not the whole circle it was cut from (#183)
-add_executable(test_arc_pick_zone test_arc_pick_zone.cpp)
-target_link_libraries(test_arc_pick_zone PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_arc_pick_zone COMMAND test_arc_pick_zone)
-
-# test_sketch_pick_overlap - overlapping lines: construction first, repeat click cycles
-add_executable(test_sketch_pick_overlap test_sketch_pick_overlap.cpp)
-target_link_libraries(test_sketch_pick_overlap PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_sketch_pick_overlap COMMAND test_sketch_pick_overlap)
-
-# test_plane_references - body outline / cross-section / other sketches on the plane become snap references
-add_executable(test_plane_references test_plane_references.cpp)
-target_link_libraries(test_plane_references PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_plane_references COMMAND test_plane_references)
-
-# test_sketch_reference_tool - the Reference tool copies on-plane geometry into the sketch
-add_executable(test_sketch_reference_tool test_sketch_reference_tool.cpp)
-target_link_libraries(test_sketch_reference_tool PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_sketch_reference_tool COMMAND test_sketch_reference_tool)
-
 # Face-sketch grid direction: world-aligned edge beats the longest diagonal
 add_executable(test_sketch_plane_axis test_sketch_plane_axis.cpp)
 target_link_libraries(test_sketch_plane_axis PRIVATE materializr_core gtest gtest_main)
@@ -608,40 +576,10 @@ add_executable(test_duplicate_sketch test_duplicate_sketch.cpp)
 target_link_libraries(test_duplicate_sketch PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_duplicate_sketch COMMAND test_duplicate_sketch)
 
-# test_sketch_corner - sketch fillet / chamfer of a two-line corner
-add_executable(test_sketch_corner test_sketch_corner.cpp)
-target_link_libraries(test_sketch_corner PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_sketch_corner COMMAND test_sketch_corner)
-
 # test_delete_sketch - sketch deletion goes through History and is undoable
 add_executable(test_delete_sketch test_delete_sketch.cpp)
 target_link_libraries(test_delete_sketch PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_delete_sketch COMMAND test_delete_sketch)
-
-# test_region_adoption - a contour drawn after a Push/Pull or Extrude was made is added to it
-add_executable(test_region_adoption test_region_adoption.cpp)
-target_link_libraries(test_region_adoption PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_region_adoption COMMAND test_region_adoption)
-
-# test_contour_scope - a feature applied to picked contours follows only their copies
-add_executable(test_contour_scope test_contour_scope.cpp)
-target_link_libraries(test_contour_scope PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_contour_scope COMMAND test_contour_scope)
-
-# test_mirror_origin - mirror a body about the world origin planes (#153)
-add_executable(test_mirror_origin test_mirror_origin.cpp)
-target_link_libraries(test_mirror_origin PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_mirror_origin COMMAND test_mirror_origin)
-
-# test_pattern_multibody - a pattern over several selected bodies (bug report 11-13-26)
-add_executable(test_pattern_multibody test_pattern_multibody.cpp)
-target_link_libraries(test_pattern_multibody PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_pattern_multibody COMMAND test_pattern_multibody)
-
-# test_sweep - a profile swept along a path (#167)
-add_executable(test_sweep test_sweep.cpp)
-target_link_libraries(test_sweep PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_sweep COMMAND test_sweep)
 
 # test_stl_import - STL triangle soup sews into a clean 6-face solid (parked feature)
 add_executable(test_stl_import test_stl_import.cpp)
@@ -769,11 +707,6 @@ add_executable(test_shell test_shell.cpp)
 target_link_libraries(test_shell PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_shell COMMAND test_shell)
 
-# test_shell_sealed - zero-opening (sealed hollow) and multi-opening Shell
-add_executable(test_shell_sealed test_shell_sealed.cpp)
-target_link_libraries(test_shell_sealed PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_shell_sealed COMMAND test_shell_sealed)
-
 # probe_rebuild - repro: does fillet re-execution stack a phantom fillet
 add_executable(probe_rebuild probe_rebuild.cpp)
 target_link_libraries(probe_rebuild PRIVATE materializr_core)
@@ -813,53 +746,10 @@ add_executable(test_chamfer_at_limit test_chamfer_at_limit.cpp)
 target_link_libraries(test_chamfer_at_limit PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_chamfer_at_limit COMMAND test_chamfer_at_limit)
 
-# test_bug_report - the pre-filled GitHub issue URL/body behind Help > Report a Bug
-add_executable(test_bug_report test_bug_report.cpp)
-target_link_libraries(test_bug_report PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_bug_report COMMAND test_bug_report)
-
-# test_report_sender - reading the relay's reply / building its env JSON (the Send half of Report a Bug)
-add_executable(test_report_sender test_report_sender.cpp ${CMAKE_SOURCE_DIR}/src/core/ReportSender.cpp ${CMAKE_SOURCE_DIR}/src/core/Base64.cpp)
-target_include_directories(test_report_sender PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_report_sender PRIVATE CURL::libcurl gtest gtest_main)
-add_test(NAME test_report_sender COMMAND test_report_sender)
-
-# test_chamfer_overlap - a chamfer size that cannot fit is refused, not drawn as junk
-add_executable(test_chamfer_overlap test_chamfer_overlap.cpp)
-target_link_libraries(test_chamfer_overlap PRIVATE materializr_core gtest gtest_main)
-target_compile_definitions(test_chamfer_overlap PRIVATE MZR_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests/data")
-add_test(NAME test_chamfer_overlap COMMAND test_chamfer_overlap)
-
-# test_i18n_format_safety - no translation may reorder/add printf conversions (would crash trf())
-add_executable(test_i18n_format_safety test_i18n_format_safety.cpp)
-target_include_directories(test_i18n_format_safety PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_i18n_format_safety PRIVATE gtest gtest_main)
-add_test(NAME test_i18n_format_safety COMMAND test_i18n_format_safety)
-
-# test_chamfer_collinear_edges - two far-apart collinear chamfer edges in one op must stay native (no fake partial-taper bench)
-add_executable(test_chamfer_collinear_edges test_chamfer_collinear_edges.cpp)
-target_link_libraries(test_chamfer_collinear_edges PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_chamfer_collinear_edges COMMAND test_chamfer_collinear_edges)
-
 # test_cascade_applied_only - the sketch cascade must not replay from a step above the undo tip
 add_executable(test_cascade_applied_only test_cascade_applied_only.cpp)
 target_link_libraries(test_cascade_applied_only PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_cascade_applied_only COMMAND test_cascade_applied_only)
-
-# test_sketch_move_hosted - sketches drawn on a body travel with the sketch that builds it (#185)
-add_executable(test_sketch_move_hosted test_sketch_move_hosted.cpp)
-target_link_libraries(test_sketch_move_hosted PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_sketch_move_hosted COMMAND test_sketch_move_hosted)
-
-# test_cascade_revival - steps a cascade switched off get another try on the next cascade of their sketch
-add_executable(test_cascade_revival test_cascade_revival.cpp)
-target_link_libraries(test_cascade_revival PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_cascade_revival COMMAND test_cascade_revival)
-
-# test_sketch_point_delete - deleting a point takes the geometry anchored on it (no dangling references)
-add_executable(test_sketch_point_delete test_sketch_point_delete.cpp)
-target_link_libraries(test_sketch_point_delete PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_sketch_point_delete COMMAND test_sketch_point_delete)
 
 
 # test_topo_pushpull - PushPullOp face-driven target via topo::Ref survives a resize
@@ -1213,30 +1103,6 @@ add_test(NAME test_mode_inference COMMAND test_mode_inference)
 add_executable(test_arc_typed_dimension test_arc_typed_dimension.cpp)
 target_link_libraries(test_arc_typed_dimension PRIVATE materializr_core gtest gtest_main)
 add_test(NAME test_arc_typed_dimension COMMAND test_arc_typed_dimension)
-
-# test_shape_spec - Line / Circle / Rectangle / Arc panels: typed length, angle,
-# width, height, chord, sweep or radius override the cursor (SketchTool::ShapeSpec)
-add_executable(test_shape_spec test_shape_spec.cpp)
-target_link_libraries(test_shape_spec PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_shape_spec COMMAND test_shape_spec)
-
-# test_plane_reference_round - the Reference tool on round / symmetric bodies:
-# seam-split arcs merge into one circle, mirror-image walls both survive
-add_executable(test_plane_reference_round test_plane_reference_round.cpp)
-target_link_libraries(test_plane_reference_round PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_plane_reference_round COMMAND test_plane_reference_round)
-
-# test_loft_host_and_rails - a loft section ignores the host face of a sketch
-# drawn on a body; a guided-loft rail below the base plane is read the right way up
-add_executable(test_loft_host_and_rails test_loft_host_and_rails.cpp)
-target_link_libraries(test_loft_host_and_rails PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_loft_host_and_rails COMMAND test_loft_host_and_rails)
-
-# test_extrude_host_face_resize - an extrude-cut drawn on a body face: enlarging
-# its circle must not leave the old hole's disc standing (the "pancake")
-add_executable(test_extrude_host_face_resize test_extrude_host_face_resize.cpp)
-target_link_libraries(test_extrude_host_face_resize PRIVATE materializr_core gtest gtest_main)
-add_test(NAME test_extrude_host_face_resize COMMAND test_extrude_host_face_resize)
 
 # test_i18n - the translation layer: ImGui ##id suffixes survive translation,
 # and every shipped string fits the glyph range the font atlas is built with

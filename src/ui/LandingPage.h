@@ -18,23 +18,12 @@ public:
         unsigned int tex = 0;  // GL texture of the thumbnail; 0 = placeholder
     };
 
-    // A project that is already open in a tab. The page used to say nothing
-    // about these: with several open, the only ways off it were the small x in
-    // the header or opening / creating something else (#184).
-    struct OpenTab {
-        size_t index = 0;      // the app's session index, handed back on a click
-        std::string name;
-        bool active = false;   // the tab the page is laid over
-        bool dirty = false;    // unsaved changes
-    };
-
     enum class ActionType { None, NewProject, OpenEntry, OpenFileDialog, Dismiss,
                             ExportStep, ExportStl, OpenSettings, OpenHelp,
-                            ImportParts, DeleteEntry, Exit, SwitchTab };
+                            ImportParts };
     struct Action {
         ActionType type = ActionType::None;
-        std::string ref, name;   // OpenEntry / ExportStep / ExportStl / DeleteEntry
-        size_t tab = 0;          // SwitchTab: OpenTab::index
+        std::string ref, name;   // OpenEntry / ExportStep / ExportStl
     };
 
     ~LandingPage();
@@ -53,10 +42,6 @@ public:
     // back to the open project.
     void setCanDismiss(bool v) { m_canDismiss = v; }
 
-    // The projects open in tabs right now, shown as a strip above the tiles
-    // (empty = no strip). Cheap to refresh every frame.
-    void setOpenTabs(std::vector<OpenTab> tabs) { m_openTabs = std::move(tabs); }
-
     // Replace the tile list. Takes ownership of the entries' GL textures
     // (deleted on the next setEntries / destruction). GL context required.
     void setEntries(std::vector<Entry> entries);
@@ -67,10 +52,6 @@ public:
     // tile that already has a texture, deletes the incoming one instead of
     // leaking it. GL context required.
     void setEntryTexture(const std::string& ref, unsigned int tex);
-
-    // Drop one tile (its project was deleted / forgotten) and free its texture.
-    // Safe to call between render()s, never from inside one. GL context required.
-    void removeEntry(const std::string& ref);
 
     // Draw (when visible) and report what the user picked this frame. The
     // caller owns the consequences - this class never loads or creates
@@ -85,7 +66,6 @@ private:
     bool m_canDismiss = false;  // see setCanDismiss
     unsigned int m_logoTex = 0; // not owned
     std::vector<Entry> m_entries;
-    std::vector<OpenTab> m_openTabs;
 };
 
 } // namespace materializr

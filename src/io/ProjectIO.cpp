@@ -24,7 +24,6 @@
 #include <cstddef>
 #include <fstream>
 #include <sstream>
-#include <set>
 #include <string>
 #include <vector>
 #include <map>
@@ -40,22 +39,6 @@ namespace materializr {
 // The loader still reads v1 files; the saver always writes v2.
 
 namespace {
-
-// Copy provenance of a sketch's elements (Sketch::getElementOrigins), minus
-// entries whose element is gone. Older readers skip the block as an unknown token.
-void writeSketchOrigins(std::ostream& os, const materializr::Sketch& sk) {
-    std::set<int> live;
-    for (const auto& l : sk.getLines())   live.insert(l.id);
-    for (const auto& c : sk.getCircles()) live.insert(c.id);
-    for (const auto& a : sk.getArcs())    live.insert(a.id);
-    for (const auto& p : sk.getSplines()) live.insert(p.id);
-    std::vector<std::pair<int,int>> rows;
-    for (const auto& [id, root] : sk.getElementOrigins())
-        if (live.count(id)) rows.emplace_back(id, root);
-    os << "ORIGIN_COUNT " << static_cast<int>(rows.size()) << "\n";
-    for (const auto& [id, root] : rows) os << "O " << id << " " << root << "\n";
-}
-
 
 // ─── v2 body block (ASCII BREP, scan-to-SB_END) ─────────────────────────────
 // Format: "SB <id>" newline, then BRepTools::Write text, terminated by a
@@ -398,8 +381,6 @@ ProjectSaveResult ProjectIO::save(const std::string& filePath, const Document& d
         ofs << "FILL_COUNT " << static_cast<int>(fills.size()) << "\n";
         for (glm::vec2 a : fills) ofs << "F " << a.x << " " << a.y << "\n";
 
-        writeSketchOrigins(ofs, *sk);
-
         ofs << "SKETCH_END\n";
     }
 
@@ -595,7 +576,6 @@ ProjectSaveResult ProjectIO::save(const std::string& filePath, const Document& d
             ofs << "NAME \"" << st.name << "\"\n";
             ofs << "DESC \"" << st.description << "\"\n";
             ofs << "ENABLED " << (st.enabled ? 1 : 0) << "\n";
-            if (st.suspended) ofs << "SUSPENDED 1\n";
             // Per-op parameter blob. v3 uses a length-prefixed binary-safe
             // form (PARAMS_LEN + raw bytes) so the blob can carry multi-line
             // content like the SketchEditOp before/after sketch snapshots.
@@ -833,13 +813,6 @@ void parseSketchBodyImpl(std::istream& ifs, materializr::Sketch& sk,
             for (int i = 0; i < n && std::getline(ifs, line); ++i) {
                 std::istringstream s(line); std::string t; glm::vec2 a(0.0f);
                 if (s >> t >> a.x >> a.y) sk.addRawFillAnchor(a);
-            }
-        } else if (tok == "ORIGIN_COUNT") {
-            // Copy provenance (Sketch::setElementOrigin): "O <id> <root>".
-            int n = 0; iss >> n;
-            for (int i = 0; i < n && std::getline(ifs, line); ++i) {
-                std::istringstream s(line); std::string t; int id = 0, root = 0;
-                if (s >> t >> id >> root) sk.addRawOrigin(id, root);
             }
         }
         // Unknown tokens inside a sketch are ignored for forward compatibility.
@@ -1510,7 +1483,6 @@ ProjectLoadResult loadImpl(const std::string& filePath, Document& doc,
                         std::string skip; std::getline(ifs, skip);
                         st.params = std::move(data);
                     } else if (t == "ENABLED") { int e = 1; ls >> e; st.enabled = (e != 0); }
-                    else if (t == "SUSPENDED") { int e = 0; ls >> e; st.suspended = (e != 0); }
                     else if (t == "CHANGED_COUNT") {
                         int m = 0; ls >> m;
                         for (int j = 0; j < m; ++j) {
@@ -1713,29 +1685,7 @@ std::unique_ptr<SketchEditOp> ProjectIO::rehydrateSketchEditOp(
     auto live = doc.getSketch(idBefore);
     if (!live) return nullptr; // sketch id from blob isn't in this document
 
-    auto op = std::make_unique<SketchEditOp>(live, beforeSnap, afterSnap);
-    // Optional tail: sketches that rode along with a whole-sketch move.
-    std::string line;
-    auto readFrame = [](std::istringstream& in, gp_Pln& out) -> bool {
-        double d[9];
-        for (double& v : d) if (!(in >> v)) return false;
-        try {
-            out = gp_Pln(gp_Ax3(gp_Pnt(d[0], d[1], d[2]), gp_Dir(d[3], d[4], d[5]),
-                                gp_Dir(d[6], d[7], d[8])));
-        } catch (...) { return false; }
-        return true;
-    };
-    while (std::getline(is, line)) {
-        if (line.rfind("F ", 0) != 0) continue;
-        std::istringstream in(line.substr(2));
-        int fid = -1;
-        gp_Pln before, after;
-        if ((in >> fid) && readFrame(in, before) && readFrame(in, after))
-            op->addFollowerMove(fid, before, after);
-    }
-    // Whatever followers this step has came back with it; nothing left to detect.
-    op->setFollowersAnalyzed(true);
-    return op;
+    return std::make_unique<SketchEditOp>(live, beforeSnap, afterSnap);
 }
 
 void ProjectIO::parseSketchBody(std::istream& is, Sketch& sk, const char* endTok) {
@@ -1816,7 +1766,6 @@ void ProjectIO::writeSketchBody(std::ostream& os, const Sketch& sk) {
     os << "FILL_COUNT " << static_cast<int>(fills.size()) << "\n";
     for (glm::vec2 a : fills) os << "F " << a.x << " " << a.y << "\n";
 
-    writeSketchOrigins(os, sk);
     os << "SKETCH_END\n";
 }
 

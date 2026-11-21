@@ -5,9 +5,6 @@
 #include <vector>
 #include <string>
 #include <memory>
-#include <map>
-#include <functional>
-#include <set>
 #include <TopoDS_Wire.hxx>
 #include <TopoDS_Face.hxx>
 #include <gp_Pln.hxx>
@@ -101,36 +98,7 @@ public:
     int addLine(int startPtId, int endPtId, bool fromText = false);
     int addCircle(int centerPtId, double radius);
     int addArc(int centerPtId, int startPtId, int endPtId, double radius);
-    // A set of sketch elements by id - what Copy and the patterns duplicate.
-    struct ElementIds {
-        std::set<int> points, lines, circles, arcs, splines;
-        // Output only (copyElements): the polygon records it made. A polygon is carried
-        // when every edge line of it is in `lines`.
-        std::set<int> polygons;
-        bool empty() const {
-            return points.empty() && lines.empty() && circles.empty() && arcs.empty() &&
-                   splines.empty();
-        }
-    };
-    // Every element in the sketch (construction ones too).
-    ElementIds allElementIds() const;
-    // Duplicate `src` shifted by `offset`: every line, circle, arc and spline in
-    // it plus the loose points, with the points they use (centres, arc ends,
-    // spline controls) copied once and shared, so connected geometry stays
-    // connected. Copies keep their construction flag and element origin. Points
-    // are never tied to a rim: a shifted copy must not stay stuck to the
-    // original's circle. Returns the ids of everything created.
-    ElementIds copyElements(const ElementIds& src, glm::vec2 offset);
-    // How far `p` is from the arc ITSELF: from the rim where p lies within the
-    // arc's sweep (counter-clockwise start -> end), otherwise from the nearer
-    // end point. Picking used the whole circle's rim, so an arc could be hit
-    // anywhere along the circle it was cut from (#183). A start point equal to
-    // the end point reads as the full circle. Infinity if a point is missing.
-    float distanceToArc(const SketchArc& arc, glm::vec2 p) const;
     int addRectangle(glm::vec2 corner1, glm::vec2 corner2); // returns first line id
-    // A rectangle at any angle: `corners` in order round the edge. Held square by
-    // perpendicular constraints and sized by width / height distances.
-    int addRotatedRectangle(const glm::vec2 corners[4]);
 
     // Spline and polygon creation
     int addSpline(const std::vector<int>& controlPointIds);
@@ -140,21 +108,6 @@ public:
     bool appendSplineControlPoint(int splineId, int pointId);
     bool popSplineControlPoint(int splineId);   // false if <2 would remain
     int addPolygon(int centerPtId, double radius, int sides, double rotationRad = 0.0);
-    // Polygons whose every edge line is in `lineIds` - the ones a Copy / pattern /
-    // mirror of those lines carries WHOLE (a polygon is a record over its lines and
-    // vertices; copying only the lines leaves plain lines behind). By value: the
-    // caller adds to the sketch while walking them.
-    std::vector<SketchPolygon> polygonsMadeOf(const std::set<int>& lineIds) const;
-    // The line joining points `a` and `b` (either direction), or -1.
-    int lineBetween(int a, int b) const;
-    // Re-create each polygon of `src` over the copied geometry: `mapPoint` takes a
-    // source point id to its copy (or -1), and the copy's edges are looked up among
-    // the sketch's lines. A polygon whose points did not all come across, or whose
-    // edges are missing, is skipped (its lines stay plain lines). Sides and radius
-    // carry over, so the copy edits as a polygon exactly like the original.
-    // Returns the new polygon ids.
-    std::vector<int> copyPolygonRecords(const std::vector<SketchPolygon>& src,
-                                        const std::function<int(int)>& mapPoint);
 
     // Element access
     const std::vector<SketchLine>& getLines() const;
@@ -221,20 +174,6 @@ public:
     int pruneOrphanPoints();
     void clear();
 
-    // Round (fillet) or bevel (chamfer) the corner at `pointId` where exactly two
-    // straight lines meet and nothing else is attached. `size` is the fillet
-    // radius, or the chamfer's setback along each line. Both lines are shortened
-    // to the tangent points and joined by an arc (or a straight chamfer line);
-    // the corner point goes. A polygon's corner dissolves the polygon into its
-    // plain lines first, like Trim does. Returns false - and changes nothing -
-    // when the point is not such a corner, the lines are (nearly) collinear, or
-    // `size` does not fit on the shorter line. `createdIds`, when given, receives
-    // the new points and elements.
-    bool roundCorner(int pointId, double size, bool chamfer,
-                     std::vector<int>* createdIds = nullptr);
-    // Same test without changing anything: is `pointId` a corner roundCorner could act on?
-    bool isRoundableCorner(int pointId) const;
-
     // CONSTRUCTION GEOMETRY: reference lines, circles, arcs and splines that
     // help you draw but are not part of the shape. The contract is that they
     // have NO effect on anything the sketch produces - regions, profile wires,
@@ -274,13 +213,7 @@ public:
     // following degree-1 endpoints. Null wire when the sketch has no open
     // chain. Used for guided-loft rails; consumers resample by height/length,
     // so polyline fidelity is ample.
-    //
-    // `exact`: build real edges instead - straight lines, circular arcs and
-    // B-spline fits through the spline control points, the same curves the
-    // closed-region builder emits. A sweep needs this: along a path sampled into
-    // dozens of tiny straight segments the pipe builder fails, and a smooth bend
-    // should come out smooth.
-    TopoDS_Wire buildOpenWire(bool exact = false) const;
+    TopoDS_Wire buildOpenWire() const;
 
     // Whole-profile shape for "extrude everything this sketch encloses":
     // closed wires grouped even-odd by containment depth - every
@@ -321,43 +254,6 @@ public:
     // handy for a deliberate click, wrong for "act on the whole sketch", which
     // would otherwise take the entire face along with the drawn circle.
     std::vector<int> drawnRegions(const std::vector<Region>& regions) const;
-
-    // Points spread over the inside of every DRAWN region (sketch-plane 2D, up to
-    // `perRegion` each; see drawnRegions). An op that records them when it is made
-    // can later tell a contour drawn AFTERWARDS - one holding none of them - from
-    // the ones that were already there. Empty past `maxRegions` regions (a
-    // text / SVG import), where per-region bookkeeping is not worth it.
-    std::vector<glm::vec2> drawnRegionSamples(const std::vector<Region>& regions,
-                                              int perRegion = 12,
-                                              size_t maxRegions = 80) const;
-    // Indices of the DRAWN regions holding none of `known` - the contours added
-    // since `known` was taken.
-    std::vector<int> regionsMissingFrom(const std::vector<Region>& regions,
-                                        const std::vector<glm::vec2>& known) const;
-
-    // --- Element provenance ("derived from") -----------------------------
-    // Multiply, Mirror and friends write COPIES into the sketch. A feature built
-    // from one contour (Subtract on a 10 mm circle) should follow its copies, but
-    // not a circle drawn separately - and nothing in the geometry says which is
-    // which. So every copy remembers the element it came from.
-    //
-    // Stored FLATTENED: setElementOrigin(copy, src) records elementRoot(src), so a
-    // copy of a copy points at the original directly and stays correct after an
-    // intermediate copy (or the original itself) is deleted. Ids are never
-    // reused, so a root id that no longer names an element is still a valid key.
-    void setElementOrigin(int newId, int srcId);
-    // The element `id` was ultimately copied from; `id` itself when it is original.
-    int elementRoot(int id) const;
-    const std::map<int, int>& getElementOrigins() const { return m_origin; }
-    void addRawOrigin(int id, int root) { m_origin[id] = root; }   // ProjectIO
-
-    // The "signature" of a contour: the sorted, de-duplicated ROOT ids of every
-    // non-construction sketch element that bounds `face` (outer wire and holes).
-    // Two contours with equal, non-empty signatures are copies of each other.
-    // Matches by sampling each boundary edge against the sketch's curves, since a
-    // region comes out of a general fuse and carries no element ids. Edges that
-    // match no element (a host face's own outline) are ignored; empty when none do.
-    std::vector<int> faceRootSignature(const TopoDS_Face& face) const;
 
     // True when buildRegions() would be a cache HIT (valid cache + current
     // geometry hash). Lets the per-frame hover pick skip sketches whose
@@ -475,14 +371,6 @@ public:
             float sweep;
         };
         std::vector<Circle> circles;
-        // In-plane free-form curves (another sketch's splines, a body's B-spline
-        // edges). `control` are the points a copied spline is built through;
-        // `poly` is a dense polyline of the same curve for picking / hover.
-        struct Spline {
-            std::vector<glm::vec2> control;
-            std::vector<glm::vec2> poly;
-        };
-        std::vector<Spline> splines;
     };
     void setFaceReferences(FaceReference refs) { m_faceRefs = std::move(refs); }
     const FaceReference& getFaceReferences() const { return m_faceRefs; }
@@ -598,7 +486,6 @@ private:
     std::vector<Constraint> m_constraints;
     int m_nextConstraintId = 1;
     std::vector<glm::vec2> m_fillAnchors; // see getFillAnchors
-    std::map<int, int> m_origin;          // element id -> root element id (see setElementOrigin)
     FaceReference m_faceRefs;
 
     // Cached in 3D, deliberately. The centroid belongs to the FACE, so its

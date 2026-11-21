@@ -1,0 +1,1633 @@
+Select
+Units
+Display unit
+Millimetres
+Centimetres
+Metres
+Inches
+Feet
+A bare number is in the display unit; add a unit to override it, e.g. 2in or 50mm.
+Unit for every length you see and type. Geometry is stored in millimetres regardless; a typed value may also carry its own unit, e.g. 2in or 50mm.
+Sketch
+Sketch on Face
+Line
+Circle
+Rectangle
+Extrude
+Extrude From
+Push / Pull
+Fillet
+Chamfer
+Shell
+Draft
+Loft
+Thread
+Split
+Union
+Subtract
+Intersect
+Subtract Sketch
+Move
+Rotate
+Scale Face
+Move Hole
+Edit Diameter
+Edit Fillet / Chamfer
+Linear Pattern
+Circular Pattern
+Linear
+Circular
+Duplicate
+Delete
+Transform
+Projection
+Construction Plane
+Construction Axis
+Remove Feature
+Unfold Faces
+Corner
+Center
+Tools
+Measure
+File
+Edit
+View
+Help
+New Project
+Open Project...
+Open Recent
+Clear Recent
+Save
+Save As...
+Save Project
+Save Project As...
+Close Tab
+Tabs
+Import
+Export
+Settings...
+Exit
+Undo
+Redo
+Home Screen
+Reset Camera
+Home
+Frame Selection
+Measure...
+Section View
+Hide Panels
+User Guide
+Keyboard Shortcuts
+Check for Updates...
+Getting Started
+Items
+History
+Properties
+Viewport
+Interactions
+Untitled
+OK
+Cancel
+Apply
+Close
+Continue
+Skip
+Yes
+No
+Back
+Next
+Plane
+Axis
+New Plane...
+New Axis...
+Normal to edge
+Normal to axis
+Normal to face
+Along edge
+Tangent to cylinder
+From cylinder axis
+Through two vertices
+Intersection of two planes
+Perpendicular to cylinder axis
+Midplane (between the 2 selected)
+Triangle (3)
+Square (4)
+Pentagon (5)
+Hexagon (6)
+Heptagon (7)
+Octagon (8)
+Custom...
+Draw
+Animate camera moves
+Glide to the sketch plane so you can follow where the view went. Off: cut straight to it.
+Length (%s)
+Diameter (%s)
+\xc3""\x98"" (%s)
+Modelling
+Fillet time limit
+  \xce""\x94"" %s
+Radius (%s)
+Width (%s)
+Height (%s)
+Rectangle (%s)
+Chord (%s)
+Sweep (deg)
+Degrees
+Endpoint
+Midpoint
+On Line
+On Circle
+On Horizontal Axis
+On Vertical Axis
+Perpendicular
+Parallel
+On Line Extension
+Tangent
+Perpendicular from Point
+Symmetry
+Construct
+Primitive
+Sketch on...
+Reference Image
+Box
+Cylinder
+Sphere
+Cone
+Torus
+XY plane
+XZ plane
+YZ plane
+Create a construction plane or axis derived from the selection
+Start a sketch on a world plane (XY / XZ / YZ)
+Add a primitive solid: box, cylinder, sphere, cone or torus
+Menu: file, edit, view, help and settings
+Discard Sketch
+Keep Editing
+Exit Sketch
+Edit Sketch
+Duplicate Sketch
+Exit Section View
+General
+Navigation
+Rendering
+Layout
+Interface
+Camera
+Mouse
+Lighting
+Overlays
+Quality
+Selection
+Session
+Theme
+Autosave
+Reset panel layout
+Touch mode (large UI + touch gestures)
+Snap to grid
+Step (%s)
+Drawing inferences
+Show level toggle in sketch toolbar
+Show measurements with Select tool
+With the Select tool, selected lines show their length, circles show diameter and radius, and arcs show radius, sweep angle and arc length. Selecting several lines also shows a total. Splines are not measured.
+Show FPS counter
+Show toolbar tooltips
+Toolbar tooltips
+Show mesh wireframe
+Show facet wireframe
+Check for updates on launch
+Include pre-release (beta) builds
+Reopen last session on launch
+Autosave saved projects
+Mouse sensitivity
+Touch sensitivity
+Orbit behaviour
+Level orbit (keep horizon flat)
+Invert ViewCube drag direction
+Headlight (light follows camera)
+Fill light (soften opposite side)
+Imported meshes (STL)
+Panels (Materializr classic UI)
+Import...
+Export...
+Reset
+Remove
+Finish
+Fit
+Auto-fit
+Flip
+Flip side
+Mirror
+Copy
+Create
+Copies
+Spacing
+Pick one or more directions. Two or more (e.g. Right + Down) make a grid.
+Up
+Down
+Columns
+X spacing
+Rows
+Y spacing
+Choose at least one direction.
+Depth
+Distance
+Pitch
+Starts
+Sweep
+Uniform
+Horizontal
+Vertical
+Right-handed
+Select all
+Select none
+Deselect
+Place Here
+Re-check
+Open Release Page
+Double-click
+X axis
+Y axis
+Z axis
+About Materializr...
+From Project...
+Select what to derive from:
+Name:
+Rename
+Enabled
+Visible
+Isolate
+Separate
++ Folder
+Folder name:
+Move to folder
+Delete folder (keeps bodies)
+Show All Bodies
+Apply Changes
+Edit Parameters
+Flip Normal
+Flip Direction
+Re-link sketch
+Re-link to body
+Combine coplanar into this
+Export STL\xe2""\x80""\xa6""
+Export as DXF\xe2""\x80""\xa6""
+Export as SVG\xe2""\x80""\xa6""
+Export to New Project
+Rotate About Axis...
+Set Breakpoint Here
+Clear Breakpoint
+Point
+Arc
+mm
+Drag to move; no editable size.
+Edit dimensions via the Scale gizmo (R).
+Select a sketch element to edit its size.
+Select a single circle or arc to edit its size.
+Press Enter or click elsewhere to commit a value.
+Centre stays put. Press Enter to apply.
+Classic: the traditional docked panels and menu bar. Modern: a top app bar, tool rail and side panel. im-touch: a near-zero-chrome full-screen viewport with floating controls only. Switches immediately; each layout keeps its own arrangement.
+Settings persist across launches.
+Lighting controls how evenly the model is lit.
+Orbit/Pan buttons take effect on Apply.
+View-only: bodies are not modified.
+Labels are user-Z-up: Z is the floor-up axis.
+Computed on Apply - may take a few seconds.
+A few seconds for typical threads.
+Click in the sketch to place.
+Drag in the sketch to position.
+Backspace removes the last placement.
+Copies along the sketch +X axis.
+Developable - unrolls exactly.
+From the selected construction axis.
+Face centre, along the plane's own axes
+Normal to selected axis/edge
+Parallel to selected face
+Tangent to selected cylinder
+Through cylinder axis (longitudinal)
+Midplane (between 2 planes/faces)
+Pick origin in sketch
+Pick axis origin in viewport
+Set position on plane
+Cancel picking
+Reset points
+Remove Last Placement
+Undo Last Placement
+Boundary cut only
+Solid (off = surface shell)
+Ruled surface (off = smooth)
+Conformal unwrap (stretch to fit)
+Groove width
+Fit clearance
+Calibrate scale...
+(no file chosen)
+Click: open snap settings
+Right-click: toggle snap
+W = Move gizmo, E = Rotate gizmo.
+Transform (body)
+  From: %s
+  Max: %s
+  Min: %s
+  To:   %s
+  X: %s
+  Y: %s
+  Z: %s
+%.0f crests over the face; each start winds %.1f turns
+%.0f deg
+%.0f turns over the face
+%.0f%%  -  drag to pan, tap to pick, scroll to zoom
+%.1f deg
+%d bodies, %d history steps.
+%d deg
+%d path(s) ready.
+%d projects in total - each reopens in its own tab.
+%d region%s selected
+%d x %d px  \xc2""\xb7""  %s x %s
+%s Thread
+%s halves
+%s, %d generated sections
+%s: %s
+%zu elements selected
+%zu face(s) selected
+%zu face(s) tilt about the body's base.
+%zu fold/score line%s
+%zu selected bodies
+(%.2f, %.2f) sketch coords
+(Del)
+(Select a planar face to enable Parallel-to-face.)
+(body on the other side of the plane)
+(equal length / radius)
+(nothing selected)
+(root - no folder)
+(see LICENSE and LICENSE-EXCEPTIONS.md in the source repository)
+2 flat faces/planes  - midplane
+2 vertices / a flat face / 2 planes
+Across a face\xe2""\x80""\xa6""
+Add
+Add Axis...
+Add Constraint
+Add Custom Material
+Add Plane...
+Add one by right-clicking a sketch element in sketch-edit mode and picking \"Add Constraint\".
+Align
+Also switches numeric fields between the in-app number pad and the system keyboard.
+An unfinished sketch from your last session was found.
+An unsaved project (never written to a file).
+Angle \xe2""\x80""\xa6"" (current value)
+Angle: %.1f deg
+Apply the action
+Arc sweep: %.1f deg
+Area: %s
+As you draw, coloured ghost guides show alignment (perpendicular, parallel, on-axis, on-midpoint, etc.) and the cursor snaps. Full adds hover-to-charge references (dwell on a point / midpoint / face vertex to align from it). Reduced is the classic guides only, no hover-charging. Off is grid + endpoint only. Constraints live on the sketch right-click \"Add Constraint\" menu.
+Assign to Selected
+At: %s
+Axes affected: %d
+Axes are 1-D primitives - they'll feed Revolve and future Pattern-Around-Axis ops. For now you can move them; rotate isn't meaningful on a line.
+Axis Direction
+Axis Origin
+Back to the open project
+Base profile + %d rail(s)
+Base: %s
+Batched transform - undo/redo restores the whole set at once.
+Bevel the picked edge(s). Set distance in the popup.
+Body
+Body %d
+Body ID: %d
+Body spans %s on %s.
+Boolean Operation
+Bottom stays at %s - drag this end to make a cone.
+Box origin = corner; the rest use it as the axis base / centre.
+Browse\xe2""\x80""\xa6""
+Buy us a Coffee
+Cancel the action and discard its preview
+Centre: %s
+Choose which mouse button orbits and which pans. Zoom is always the scroll wheel.
+Choose your workspace
+Chord & Radius scale the arc (sweep kept); Sweep changes the angle. Press Enter to apply.
+Claude (Anthropic) - pair-coding collaborator
+Clear
+Click a body in the viewport - clicking a face counts. Ctrl+click to add more bodies, or use box-select.
+Click a point in the viewport - snaps to the grid.
+Click again to start a new measurement.
+Click in the sketch to place (Backspace undoes the last).
+Click in the sketch - snaps to the grid.
+Click the first point in the viewport\xe2""\x80""\xa6""
+Click the sketch elements you want projected - click each to add or remove. Use Select all / Clear below.
+Click two points a KNOWN distance apart (e.g. two marks on the ruler in your photo), then enter that distance.
+Click within ~8 px of an edge to pick it. Ctrl+click to add more edges to the sum.
+Clicking the circular edge / face in the viewport also re-edits.
+Coincident
+Concentric
+Conformal unwrap - one piece, ~no stretch.
+Copy the selected sketch elements in a row or a grid: left, right, up and/or down.
+Copy the selected sketch elements around an origin you specify.
+Create a construction axis derived from the current selection.
+Create a construction plane derived from the current selection.
+Create a stock OCCT primitive (box / cylinder / sphere / cone / torus). Picking one opens its parameter popup - defaults land a 10 mm / R5 mm shape at the world origin.
+Create: a sketch or a primitive solid
+Created %d copies
+Created Plane ID: %d
+Created body ID: %d
+Creates a plane parallel to the base plane, offset along its normal.
+Creates a plane parallel to the selected face, passing through the specified point.
+Ctrl-click the other sketches (or their regions) in loft order - as many as you like - then click Loft again.
+Current version: %s
+Custom Material
+Cut every body it reaches
+Cut the body in two with a plane. The ghost rectangle in the viewport is where the cut lands.
+Cut this region into the body the sketch was drawn on (preview in red).
+Cutting the helical groove%.*s
+Cycle loops/islands
+Date: %s
+Delete the selected sketch elements (undoable)
+Depth: %s
+Diameter %s, length %s
+Diameter: %s   Length: %s
+Dimension tool (D): click a line, circle, point pair, or two lines, place the label, then type the value.
+Direction: %.3f, %.3f, %.3f
+Direction: (%.3f, %.3f, %.3f)
+Discard
+Discard the current sketch entirely and leave sketch mode. Rewinds history to before the sketch was entered; the body returns to its pre-sketch state. Useful when you've started a sketch you don't want to keep - Esc-while-placing only cancels the in-progress shape, this clears everything.
+Distance (%s)
+Distance \xe2""\x80""\xa6"" (current value)
+Distance: %s
+Don't Save
+Don't show this again
+Download the new build from the release page; the installer or portable zip will replace this one.
+Drag in the sketch to position, then Place Here.
+Drag positive distance to extrude, negative to cut into the body the sketch sits on.
+Drag the arrow to extrude this region into a body, or cut it into the parent.
+Drag the arrow to push the sketch's regions into the body beneath them, or pull them out of it. Modifies that body in place - use Extrude From for a separate body.
+Draw a circle: click centre, drag to radius.
+Draw an axis-aligned rectangle: click one corner, drag to the opposite.
+Draw straight line segments. Click to add vertices, Esc to finish.
+Driving
+Duplicate the selected sketch elements at an offset.
+Each profile is extruded through the others and the prisms are intersected (visual hull).
+Edges: %d selected
+Edit dimension
+Emboss
+Enable Section
+Engrave
+Enter
+Equal length
+Equal radius
+Export %s
+Export DXF
+Export SVG
+Export as STEP...
+Export as STL...
+Export\xe2""\x80""\xa6""
+Extrude Distance (%s)
+Extrude Face
+Face
+Faces removed: %d
+Faces: %d
+Faces: %d -> %d
+Filter:
+Finish Sketch
+Finish the current shape, keeping the points placed
+First, make it yours
+Fix Position
+Flip base (fixed end)
+Generate Views
+Go Here
+Grows from its centre; attached arcs keep their angle. Press Enter to apply.
+Half-angle: %.1f deg
+Holes: %d stay, %d slant, %d vertical.
+Hollows the body, opening a face.
+Hover any toolbar button for a short description of what it does. Turn off if you already know the tools and find the pop-ups distracting.
+How many drawing guides to show, and how eagerly they snap. Max = Full plus wider catch ranges tuned for fingertips (touch). Full = the classic guides PLUS hover-to-charge references (dwell on a point to align from it). Reduced = the classic guides only, no hover-charging. Off = grid + endpoint only. Click to cycle.
+IOR: %.2f
+If on, Materializr asks GitHub for the latest release at startup and pops a small dialog when a newer build is available. Turn off for offline or portable use; you can still check manually via Help \xe2""\x86""\x92"" Check for Updates.
+If on, Materializr reopens every project you had open when you quit - one tab each - and skips the home screen. Closing a project's tab before quitting leaves it out; projects that have never been saved aren't restored here (crash recovery offers those separately).
+Import Parts...
+Import an SVG file as sketch outlines: pick the file, set the width in the popup, click to place. Paths become closed regions - extrude a logo or engrave it onto a face.
+In this layout:  %s
+In-plane X: %.3f, %.3f, %.3f
+Insert text as real outline geometry: set string, font and letter height in the popup, then click to place. Letters become closed regions - extrude them or engrave them onto a face.
+It wasn't committed before the app closed (a crash, or a restart).
+Join our Discord
+Join the beta channel: update checks also consider pre-release builds (e.g. 1.3.0-beta.1) - early access to the next version's features, which may be rougher. Off keeps you on stable releases only.
+Keep Original
+Keep the cutter bodies after cutting
+Later cuts (holes, slots, chamfers) reorder beneath the thread automatically; the thread then re-cuts in the background. Sharp profiles on long threads can take a while each re-cut, so threading last is still fastest.
+Latest release:  %s
+Lathe
+Lathe: spin the selected sketch's profile around a Construction Axis into a new solid. Pick the axis next.
+Lay Flat on Plane\xe2""\x80""\xa6""
+Lay the body flat into a 2D pattern (cut + fold lines) for a laser cutter, CNC, or printed template. Mark it as foam board / sheet metal / wood to set how folds are processed.
+Leave sketch mode and return to the 3D viewport. Keeps the sketch.
+Leave the sketch and throw away its changes?
+Length:    %s
+Length: %s
+License: GNU GPLv3, with additional permissions
+Loaded from a saved project. Undo/redo work, but the parameters of a reloaded step can't be edited.
+Location:
+Look at Sketch
+Lower = coarser, faster, with larger merged flat faces to sketch on. Higher = more faithful but heavier; very high may take a few seconds.
+Major must exceed minor - equal radii are a degenerate self-touching torus.
+Make a NEW body by extruding the sketch's closed regions, leaving any host body unchanged. Whole-sketch extrude assumes ONE outer boundary - for multi-shape sketches (SVG imports, text), click individual regions in the viewport (Ctrl+click for several) and extrude those instead.
+Make a NEW body from this region (Ctrl+click several regions to extrude them together). The source sketch/body is left unchanged.
+Make equal
+Materializr didn't close cleanly (a crash, hang, or restart).
+Materializr has three interface styles. Tap one to try it - the app behind this window switches instantly, so you can see the real thing. You can change your mind anytime in Settings > Appearance.
+Materializr is designed for tablets and larger displays. On a small screen the panels and toolbars are cramped and some controls may be hard to reach - a tablet or larger is strongly recommended.
+Materializr is free and open source, and always will be. If it has earned a place in your workflow, please consider supporting development - it keeps the project moving.
+Merge Faces
+Metallic: %.2f
+Midpoint: %s
+Mirror selected elements across a sketch line you'll pick next.
+Mirror the selected bodies across a plane you pick next.
+Mirrored body ID: %d
+Mode: %s
+Move / rotate with the gizmo like a construction plane. Sketch on it to trace the photo.
+Move Face
+Move the angle slider to preview.
+Move the hole this rim belongs to: drag one rim to tilt the bore, one straight side to reshape it, or select both rims to slide the whole hole.
+Move: %s
+Multi-point spline. Click control points, Enter to finish.
+Multi-start cuts per-groove - slower than a single start.
+Name: %s
+Nearly developable (~%.1f\xc2""\xb0"" curvature).
+Need at least one cutter (ticked) and one body to keep.
+New bodies:
+New folder\xe2""\x80""\xa6""
+New tab: empty, open a file, or a recent project
+No snapshot
+Non-Standard profiles cut per-turn - a long thread can take a while.
+Normal:  %.3f, %.3f, %.3f
+Normal: %.3f, %.3f, %.3f
+Note: only flat / cylindrical / conical walls can be drafted (a kernel limit) - for freeform shapes like wing skins, use Scale Face on the END face instead.
+Nothing editable in this step. Resize lines, rectangles and arcs from the Properties panel while editing the sketch.
+Off hides the live Full / Reduced / Off cycle button from the sketch toolbar - use this combo instead. On (default) keeps the per-session button visible.
+Offset
+Offset from centre: %s
+On: finger-sized UI, long-press menus, on-screen toggles, trackpad navigation. Off: the desktop mouse/keyboard layout - use it with an attached mouse/keyboard. Takes full effect on restart.
+On: orbiting is a level turntable. Off: free trackball that can tumble in any direction.
+Open
+Open Project on GitHub
+Open faces: %d selected
+Or drag the two arrows on the face.
+Orbit and pan buttons are configurable in
+Origin
+Origin:    %s
+Origin:  %s
+Origin: (%.2f, %.2f, %.2f)
+Original: %s
+Pattern
+Periodically re-saves the project once it has been saved to a file at least once.
+Pick a hole's top edge to slant it, its wall to keep it a vertical tube.
+Pick a measurement mode above.
+Pick sketch elements (points, lines, regions). Drag selection to move.
+Plane normal: (%.2f, %.2f, %.2f)
+Plane origin: (%.1f, %.1f, %.1f)
+Plane: %s
+Planes affected: %d
+Point the axis passes through. Drag the gizmo later (after Apply) to fine-tune.
+Points picked: %d / 2
+Polygon
+Presets
+Press Enter to commit a value, then Apply Changes.
+Primitives...
+Profiles: %d
+Project: %s
+Pull axis
+Push/Pull
+Pushes the plane along its normal. Negative for the opposite side.
+R4stl1n - original project
+Radii: %s / %s
+Radius
+Radius \xe2""\x80""\xa6"" (current value)
+Radius: %s
+Radius: %s  (dia %s)
+Rail %zu: %s
+Re-cutting the thread on the changed body%.*s
+Re-enabled, but this step still can't find the geometry it referenced on the current body, so it produces nothing. Delete it and re-apply the feature on the updated body.
+Re-enter sketch mode to revise this region's parent sketch.
+Re-enter sketch mode to revise this sketch's geometry.
+Regions: %zu
+Regular polygon: click centre, drag to size. Side count in properties.
+Regular polygon: pick the number of sides, then click the centre and drag for size / rotation.
+Remove the last segment and keep drawing
+Removes the selected face(s) and heals the surrounding faces back together - e.g. take a baked fillet back to a sharp edge so you can re-fillet it.
+Reset Offset
+Resize %s
+Resize the cylindrical face this edge belongs to.
+Restore
+Restore it
+Restore the default panel arrangement - use this if a panel gets dragged off-screen or docking gets messy. Also re-applies the interface scale to the panel widths.
+Revolve the selected body/bodies around a Construction Axis (a fan, a hinge). Pick the axis next; multi-body selection rotates as a group.
+Rotate +45
+Rotate -45
+Rotate About Axis\xe2""\x80""\xa6""
+Rotate left
+Rotate right
+Rotates copies around the (x, y) origin in sketch coords.
+Roughness: %.2f
+Round the picked edge(s). Set radius in the popup.
+Ruled Surface
+Save to device\xe2""\x80""\xa6""
+Scale
+Scale (%%)
+Scale how far the camera moves per gesture (1.00x = default).
+Scale this face; the side walls re-slope to follow. Under 100%% shrinks it, over 100%% grows it. Full length = walls follow from the base; shorter = blend only near the face.
+Scale: %.0f %%
+Scales orbit, pan, and zoom uniformly. Lower it if a trackpad feels too fast compared to desktop cursor speed; raise it for a snappier feel with a mouse. 1.00x is the default baseline.
+Scope: %s
+Second body ID: %d
+Select All Edges of Body
+Select All Edges of Face
+Select Body
+Select Face
+Select a profile (face or wire) and a path (wire) to sweep along.
+Selected: %s
+Settings
+Settings \xe2""\x86""\x92"" Navigation.
+Shaped profiles cut per-turn - a long thread can take up to a minute.
+Share\xe2""\x80""\xa6""
+Sharp profiles can take a while on long threads.
+Show a small frames-per-second readout at the top of the screen (im-touch layout). Turn off to hide it entirely.
+Show or hide the classic interface's docked panels. Applies to the classic UI only - the im-touch shell arranges its own panels.
+Show the Move gizmo on the parent sketch. Drag an axis to reposition the sketch in 3D - geometry follows, so the sketch becomes a movable construction plane. Outside ortho view only.
+Show the Move gizmo on the selected sketch. Drag an axis to reposition the sketch in 3D - its geometry rides along, so this effectively turns the sketch into a movable construction plane. Only available outside ortho view and sketch-edit mode.
+Show the Move gizmo on this axis. Drag an arrow to translate the axis origin; the direction is preserved.
+Show the Move gizmo on this plane. Drag an axis arrow to nudge it; the live readout pinned to the cursor shows the offset along the plane's own normal.
+Show the Rotate gizmo on the parent sketch. Drag a ring to spin the sketch around its centroid.
+Show the Rotate gizmo on the selected sketch. Drag a ring to spin the sketch around its centroid.
+Show the Rotate gizmo. Drag a ring to spin the plane around its origin; snap is 5\xc2""\xb0"" increments when snap-to-grid is on.
+Show the rotate gizmo. Drag rings to rotate around each axis. (E)
+Show the scale gizmo. Drag handles to resize. (R)
+Show the translate gizmo. Drag axes / planes to move. (W)
+Silhouettes: %d
+Size: %s x %s x %s
+Sketch ID: %d
+Sketch on XY
+Sketch on XZ
+Sketch on YZ
+Sketch on this Face
+Sketch on this Plane
+Slide (%s)
+Snap 1 deg
+Snap step: %s   |   %s
+Snap step: %s (base %s)   |   %s
+Snap the camera to look straight down the sketch plane (orthographic).
+Solid
+Source Point
+Source body: %d
+Split Body
+Split into: %d bodies
+Standard reference plane through the origin.
+Start a new sketch lying on this construction plane - same workflow as Sketch on Face, just with the plane as the host.
+Start a new sketch on the world XY (floor) plane.
+Start a new sketch on the world XZ (front) plane.
+Start a new sketch on the world YZ (side) plane.
+Step %d of %d
+Subtract sweeps the profile like Extrude, then cuts that volume out of the body it reaches.
+Support us - Buy us a Coffee
+Symmetric (both sides)
+Tangent (curve + line)
+Target Point
+The base profile shrinks/grows to follow the\nrails as it rises; rails meeting a single point\nclose to an apex.
+The drawing tools (Line, Circle, Rectangle, Arc,
+This sketch has no dimensional constraints - only Horizontal / Parallel / etc., which have nothing to tune.
+Threaded body - applies on OK,\nthen the thread re-cuts in background.
+Three-point arc: click start, end, then a point on the curve.
+Tick the cutters - they're subtracted
+Tilt and Twist are separate ops - one gesture does either a tilt OR a twist, not both. For a tapered-and-twisted face, commit one then the other.
+Tilt from horizontal: %.1f\xc2""\xb0""
+Tip: hover a sketch region to highlight it, click to select, Ctrl+click to add to selection.
+Tip: pick SIDE walls - a cylinder wall becomes a cone, box sides become a pyramid.
+Tip: press Esc to cancel any in-progress operation. Ctrl+Z / Ctrl+Y undo and redo history steps.
+Toggle the on-screen keyboard
+Top stays at %s - drag this end to make a cone.
+Total area (%d faces): %s
+Total length (%d edges): %s
+Total width: %s
+Trackpad mode (left-drag = orbit, Shift+left = pan)
+Translation: (%.3f, %.3f, %.3f)
+Transmission: %.2f
+Trim a sketch segment at the nearest intersections.
+Two distances
+Two distances (A / B)
+Type an exact offset to translate the sketch's plane by - useful when you want the second \"construction plane\" at a precise distance instead of dragging the gizmo. Apply nudges the sketch by the typed values (from its current pose) and resets the fields.
+Type exact angles instead of dragging the gizmo - useful when the selection is too large for a smooth live drag. Rotation is composed X \xe2""\x86""\x92"" Y \xe2""\x86""\x92"" Z around the selection centroid.
+Undo (in a sketch: backs out the in-progress shape first)
+Undo/redo still work; to change one, select its feature and\nuse Remove Feature, then redo it.\n(Usual cause: a save from an older version.)
+Unfold / Flatten
+Unsaved work from your last session was recovered.
+User guide
+Welcome to Materializr - a parametric 3D CAD app. This guide covers the basics so you can get something on screen quickly. Camera controls and key bindings can be changed in File \xe2""\x86""\x92"" Settings.
+a cylinder  - tangent / normal
+a cylinder or straight edge
+an edge or axis  - normal plane
+automatic: %s at this pitch
+from the unticked bodies, which remain.
+lead %s/turn
+lead %s/turn (%d interleaved helixes)
+min %s (half the chord)
+stevebushwa - design, testing, direction
+\xc2""\xb0"" around
+\xe2""\x80""\xa2"" %d bodies - rotate together around the axis
+\xe2""\x80""\xa2"" Body: %s (id %d)
+\xe2""\x80""\xa2"" Sketch: %s (id %d)
+\xe2""\x80""\xa6""now click the second point.
+%d region(s) selected - click any to add or\nremove. Use Clear to reset.
+(Select 2 planes/faces, an axis/edge, or a cylinder\n for Midplane / Normal-to-axis / Tangent.)
+Add taps to the current selection\n(the touch equivalent of holding Ctrl)
+All regions. Click elements to project only\nthose (click each to add or remove).
+Degrees of freedom: %d\nNegative = contradictory constraints, zero = uniquely determined, positive = free to drag.
+Each sketch is the body's outline seen from\nits plane's direction; the solid is what\nmatches ALL of them (order doesn't matter).
+Extrude the sketch's regions and cut the result out of the body they\nrun into - the host body when the sketch sits on one, otherwise\nwhichever body the sweep reaches.
+Imported mesh - a reference body.\nSketch on it and snap to it; modelling operations (booleans, fillets, push/pull) decline it.
+Multi-select: add taps to the current selection\n(the touch equivalent of holding Ctrl)
+Navigation lock: one finger orbits;\ntaps don't draw or select
+Projects the sketch onto this face along the\nsketch's normal, then cuts in or raises out.
+Sketch inference level (snapping / guides)\nClick to cycle: Full \xe2""\x86""\x92"" Reduced \xe2""\x86""\x92"" Off \xe2""\x86""\x92"" Max
+Sketch inference level (snapping / guides)\nTap to cycle: Full \xe2""\x86""\x92"" Reduced \xe2""\x86""\x92"" Off \xe2""\x86""\x92"" Max\nMax widens the catch ranges for fingertips.
+Focus
+Multi
+Dark
+Light
+Left
+Middle
+Right
+Low
+Medium
+High
+Ultra
+Max (touch)
+New Body
+Cut
+Today
+Yesterday
+Boolean Union
+Boolean Subtract
+Boolean Intersect
+Revolve
+Align body
+Delete body
+Duplicate body
+Duplicate sketch
+Boundary fill from
+Combine
+Twist Face
+Resize
+Text
+Spline
+Separate body
+%.0f fps
+%s  (%d step%s)
+%s thread
+Accuracy
+Add Variable
+Alignment
+Alignment crosses in the page overlaps for precise assembly.
+All bodies
+Ambient
+Angle
+Angle snap
+Anti-aliasing
+Auto-Save
+Axis origin
+Blue line
+Bodies
+Body Properties
+Click two points a known distance apart in the photo (the ruler you photographed), type that distance, and the image scales to real millimetres.
+Constraints
+Construction Axes
+Construction Planes
+Credits
+Curve detail
+Cutting Plane
+Default STL accuracy
+Detail
+Dimensions
+Direction
+Disabled
+Distance B (other face)
+Distance between points (%s)
+Done placing - return to the Select tool (same as the window's X).
+Double-click speed
+Draw the facet edges of imported STL bodies. Turn off for a clean shaded surface to sketch on.
+Edge Ops
+Fabrication
+Face Operations
+Filter
+Font
+Format
+From %s
+Grid opacity
+Grid thickness
+Guided loft
+Higher quality uses more polygons, smoothing curves and holes.
+Higher values brighten shadowed faces for more uniform lighting.
+Hinge
+History: no steps yet
+How finely curved surfaces are faceted (max angle per facet). Larger = coarser: fewer, bigger pieces/score lines. Smaller = closer to the true curve but many more cuts.
+Inference level
+Interval (min)
+Interval (s)
+LSCM, like a Blender UV unwrap. One connected piece with the distortion spread out - cut it and let a pliable material stretch to shape. Off = accurate developable pieces (for rigid stock).
+Marks
+Material
+Materializr
+Max time between two clicks to count as a double-click. Raise it if double-clicking to select a body feels too fast on a trackpad. Default 0.30 s.
+Max widens snap/alignment catch ranges for fingertips - stronger than Full. Full and below behave the same on every device.
+Mesh quality
+Metallic
+Mirror Plane
+Mirror across
+Mode
+Multi-start thread: %d interleaved helixes. One full seat = 1/%d turn.
+Multisampling (MSAA) smooths jagged edges in the viewport.
+Name
+No history available.
+Nothing here yet
+Object
+Off gives a clean shaded body. You can also toggle this later in Settings \xe2""\x96""\xb8"" Rendering.
+Offset (%s)
+Offset from plane
+On: ThruSections caps the ends and produces a solid body. Off: open shell - useful when one profile is open or you want a swept surface.
+Opacity
+Opacity of the sketch-plane grid. Lower it if the grid competes with your sketch lines; 0 hides it.
+Open projects
+Operation History
+Orbit
+Origin (%s)
+Page
+Pan
+Physical width of the photo's full frame. Height follows the image's aspect ratio. Use Calibrate to derive this from a ruler in the shot.
+Pre-fills the STL import dialog. Lower = coarser/faster with larger merged flat faces; higher = more faithful but heavier.
+Profile
+Profiles are skinned in this order - top of the list is one end of the loft. Reorder with the arrows if the surface jumps back and forth. Flip a section if the loft pinches or twists there.
+Projects you open or save appear here.
+Properties: %s
+Radial gap so a PRINTED thread fits its mate (0.2\xe2""\x80""\x93""0.4mm typical). 0 = exact.
+Radial gap so a PRINTED thread fits its mate (0.2\xe2""\x80""\x93""0.4mm typical). 0 = geometrically exact.
+Red line
+Region
+Remove the outlines from the most recent placement (also Backspace). Press again to walk back further.
+Reverse this profile's vertex order. Use it if the loft pinches to an apex or twists at this section - usually means its start vertex isn't lined up with the neighbouring profiles'.
+Rotate +1\xc2""\xb0""
+Rotate -1\xc2""\xb0""
+Rotate by
+Rotate to the orientation that needs the fewest PDF pages.
+Rotation axis
+Roughness
+Ruled draws straight-line ribs between matching vertices on adjacent profiles. Smooth interpolates a curved surface - usually nicer between similar profiles, less predictable between dissimilar ones.
+Save Version
+Sections (%d)
+Selected: %d %s
+Selection line width
+Selection: %d point%s, %d line%s, %d curve%s
+Silhouettes (%d)
+Sketch Tools
+Sketch grid line width, as a multiplier of the default (1.0x). Raise it for a bolder grid, lower it for a finer one. Only affects the sketch-plane grid, not the ground.
+Sketch line width
+Sketches
+Snap & Grid
+Target plane
+The face you're looking at is always lit; removes large cast shadows.
+Thickness of sketch lines, circles and arcs (and the vertex dots). Increase if sketch geometry is too thin or blends into the grid.
+Thickness of the highlight drawn over selected edges and bodies. Increase to make selected edges easier to see.
+This round is frozen (saved before edit support). Use Remove Feature above to restore the sharp edge, then re-fillet.
+Tilt (deg)
+Type
+Underlay strength - drop it until your sketch lines read clearly on top of the photo.
+Undone - Go Here replays it.
+Version History
+Vertex
+While drawing a line, snap its direction to multiples of this angle from the start point. Lower = more snap rays (15\xc2""\xb0"" is the classic CAD default); higher = only the cardinal angles; Off = free angles.
+Width of the cut at the surface. 0 = automatic (a set fraction of the pitch).
+Width of the cut at the surface. 0 = automatic (a set fraction of the pitch, which is how threads are normally proportioned).
+Working\xe2""\x80""\xa6""
+Zoom
+Off: cut ONE body - the one the sketch sits on when it has a host, otherwise whichever the sweep reaches most of.\nOn: cut every body the swept profile reaches, each as its own undoable step.
+Shell failed - try a thinner wall, or\nthis body's faces can't be shelled.
+Shell failed: OCCT can't open a fillet-bordered face.\nShell the body FIRST, then add the fillets.
+Action
+Expression
+Shortcut
+Value
+%d profiles ready
+%d regions - live preview is off here.
+  - a lot to cut; coarsen the bevel or split the piece
+  \xe2""\x9a""\xa0"" net overlaps - may need cutting into pieces
+(none)
+A newer release is available.
+Amber (frozen) steps reloaded without editable parameters. (hover for more)
+Apply will be rolled back.
+At least 2 profiles required
+Auto-save pending...
+Axis A (red)
+Axis B (green)
+Boolean modes need a target body in the selection.
+Built with OpenCASCADE, Dear ImGui, SDL3, GLM, libcurl.
+Can't delete: a later operation depends on it.
+Can't remove: the neighbouring faces can't be extended to close the gap. Try a different face - a single fillet / round usually works.
+Capped at %s - a crest must survive between turns.
+Change this chamfer's distance without re-picking edges.
+Change this fillet's radius without re-picking edges.
+Circular pattern: copy the selected sketch elements around an origin you specify.
+Click a point in the sketch\xe2""\x80""\xa6"" (Esc to cancel)
+Confirm to apply (may take a moment).
+Conformal unwrap - one piece, up to %.0f%% area stretch (a pliable material takes up the difference).
+Construction-axis transform (undo/redo only).
+Construction-plane transform (undo/redo only).
+Couldn't reach GitHub: %s
+Couldn't recompute after an upstream change. Edit its parameters, fix the step before it, or delete it.
+Cut the selected edges to a flat bevel.
+Delete the face and heal the body over it.
+Dimension: tap entities, tap to place the label, type the value.
+Draw a circle: press the centre, drag to the radius.
+Draw a rectangle: press one corner, drag to the opposite.
+Draw straight line segments. Tap to add vertices; Finish ends the chain.
+ERR
+Empty shape
+Extrude the face into new material.
+Extrude the region and cut it out of the body it runs into.
+Extrude the region into a new solid body.
+Extrude the sketch's regions and cut them out of the body they run into.
+Extrude the sketch's regions into a solid body.
+Flatten the body into a 2D cut pattern (SVG / tiled PDF).
+Flatten the selected faces into a 2D cut pattern (SVG / tiled PDF).
+Font file not found - cannot place text.
+Hollow the body, leaving this face open.
+Invalid diameter for this feature -
+Invalid: %s
+Linear pattern: copy the selected sketch elements in a row or a grid, left, right, up and/or down.
+Loft needs at least two profiles.
+Measure distance / length between picked sketch elements.
+Measure distance, length, or angle between picked features.
+Mirror the body across a plane you'll place next.
+Move the construction axis.
+Move the construction plane along its normal.
+Move the face (its feature follows).
+Multi-point spline. Tap control points; Finish ends the curve.
+Multi-start beyond 120 crests can fail the cut - raise the pitch.
+No constraints on this sketch.
+No document loaded.
+No measurable sub-shapes selected.
+No path selected
+No preview: needs a FLAT end face (and 100%% is a no-op). Try another face or tweak values.
+No preview: this face can't draft along the current Pull axis. Try another axis, Flip base, or pick a side face.
+No profile selected
+No shape data
+No variable manager
+No variables defined
+No version manager available.
+No versions saved yet.
+Note: Left is also used to select; assigning it here may conflict.
+Note: drawing the facet wireframe has a performance cost on dense meshes - turn it off if the viewport feels sluggish.
+Path set
+Pick a point in the viewport\xe2""\x80""\xa6"" (Esc to cancel)
+Pick sketch elements (points, lines, regions). Drag a selection to move it.
+Previewing %.0f%% x %.0f%% over %s
+Previewing %.1f deg
+Previewing removal
+Profile set
+Projection failed - the selected region(s) couldn't
+Push/pull the face along its normal.
+Push/pull the region into or out of the body beneath it.
+Push/pull the region into or out of the host body.
+Push/pull the sketch's regions into or out of the host body.
+Regular polygon: tap the centre, drag to size. Side count in properties.
+Reopen the selected sketch for editing.
+Reopen the sketch this region belongs to.
+Restart Materializr to apply the new mode.
+Restored from an older save - no editable parameters. Undo/redo still work.
+Rotate the body around an axis (watch a fan spin or a hinge open).
+Rotate the construction plane.
+Rotation (deg)
+Round the selected edges with a radius.
+Save the project once to start autosaving.
+Scale the body: uniform, or per-axis in properties.
+Sections sit on very different planes. Loft skins them in list order (a stack of cross-sections), so this will likely fold through itself. For a base + side-wall shape, draw the side silhouettes as OPEN curves instead - one closed profile plus open curves lofts guided by them as rails.
+Select an object or operation
+Selection: None
+Set the hole or boss to an exact diameter.
+Show the rotate gizmo: drag rings to rotate around each axis.
+Show the translate gizmo: drag axes or planes to move.
+Spin the sketch profile around an axis into a solid.
+Spin the sketch's largest closed profile around an axis into a solid.
+Start a sketch on the selected construction plane.
+Start a sketch on the selected face.
+Step %d (%s) couldn't recompute - the geometry it referenced no longer exists after an upstream step was edited or disabled. Re-enable the disabled step, edit an upstream step (it retries automatically), edit this step's parameters, or delete it.
+Three-point arc: tap start, end, then a point on the curve.
+Tilt the face - or twist it with the ring about its normal.
+Too many turns (max 300) - raise the pitch.
+Trim a sketch segment at its nearest intersections.
+Twist (deg)
+You are running the latest release.
+[SKETCH MODE]
+a hole can't exceed the surrounding wall.
+be applied (off the face, or too thin/degenerate).
+\xe2""\x80""\xa2"" Body: none
+\xe2""\x80""\xa2"" Sketch: none - select one and re-open.
+\xe2""\x9a""\xa0"" Can't flatten this in one piece (%.0f%% stretch - it'd be a squashed blob). Untick \"Conformal unwrap\" for accurate developable pieces.
+\xe2""\x9a""\xa0"" Doubly-curved (~%.0f\xc2""\xb0"" total) - won't lie flat as accurate developable pieces. Tick \"Conformal unwrap\" for one stretchy piece, or split into developable strips.
+Invalid: %s\nApply will be rolled back.
+%d regions - live preview is off here.\nConfirm to apply (may take a moment).
+Invalid diameter for this feature -\na hole can't exceed the surrounding wall.
+Projection failed - the selected region(s) couldn't\nbe applied (off the face, or too thin/degenerate).
+Add an exact copy of the selected body on top of itself. Use Move to reposition. Ctrl+D for keyboard.
+Circle origin: Center = tap the centre then drag the radius; 2-Point = the two taps are opposite ends of the diameter. Tap to toggle.
+Cut a helical screw thread into the picked cylindrical face - external on a boss, internal in a hole.
+Cut bodies out of others. Pick which are cutters in the popup.
+Cut the body in two. Pick the axis and slide the cut off centre - a ghost plane shows where it lands before you commit.
+Delete the selected body / bodies. Undoable from the History panel.
+Draft angle for moulding or printing: tilt the selected face(s) by an angle about a fixed neutral plane. Unlike Rotate it takes SEVERAL faces at one angle (all four walls of a box) and works on curved faces too - a cylinder drafts into a cone.
+Extrude the region into a NEW body, leaving the host body unchanged.
+Extrude the sketch's regions into a NEW body, leaving the host body unchanged.
+How many drawing guides to show, and how eagerly they snap. Max = Full plus wider catch ranges tuned for fingertips. Full = classic guides plus hover-to-charge references. Reduced = classic guides only. Off = grid + endpoint only. Tap to cycle.
+Import a photo as a traceable underlay on a construction plane. Photograph the object with a ruler in the shot, calibrate the scale off the ruler, then sketch over it - move/rotate the plane like any construction plane.
+Import an SVG file as sketch outlines: pick the file, set the width in the popup, tap to place.
+Insert text as real outline geometry: set string, font and letter height in the popup, then tap to place.
+Keep only the volume the selected bodies share (A \xe2""\x88""\xa9"" B).
+Merge the selected bodies into one (A \xe2""\x88""\xaa"" B). Overlapping volumes fuse.
+Merge the selected faces into one. Use this on the seam lines across a flat face that an imported STEP part arrives with - they also confuse Unfold and sketch-on-face. Refuses if the faces aren't really one surface.
+Move this hole: drag one rim to tilt the bore, one straight side to reshape it, or select both rims to slide the whole hole.
+Open a popup to copy the selected body along an axis a fixed distance apart. Pick X / Y / Z, count, and spacing with a live preview.
+Open a popup to copy the selected body around an axis. Pick the axis (X / Y / Z), count, total angle, and click in the viewport to pick the axis origin with grid snapping.
+Open the Construction Axis popup. Pick World-X / Y / Z through an origin point, or two world points / a face normal. The axis lands in history; later Revolve uses it as a rotation axis.
+Open the Construction Plane popup. Pick XY / XZ / YZ or Parallel-to-Face (when a planar face is selected) with a live-previewed offset. The plane lands in history; sketch on it like any face.
+Project a sketch onto this face along the sketch's normal, then engrave (cut in) or emboss (raise out) to a depth.
+Push/pull the sketch's regions into or out of the body beneath them.
+Rectangle origin: Corner = tap a corner, drag to the opposite; Center = tap the centre, drag to a corner. Tap to toggle.
+Slide the whole hole across the face it pierces - select a rim edge instead to tilt or reshape one end.
+Sweep the body for faces that are exactly coplanar and merge them. Imported STEP parts arrive with flat surfaces split into pieces - the seam lines across an otherwise flat face, which also confuse Unfold and sketch-on-face. For a seam this leaves behind, select the two faces either side of it and merge those instead.
+Scale this face; the side walls re-slope to follow. Under 100% tapers it in, over 100% flares it out. Shorten the length to blend near the face instead of from the base.
+Built from 
+ - editing it updates this body.
+Detached from 
+ - moved independently; sketch edits won't update this body.
+Detached - moved independently; edits won't update 
+Drives 
+ - editing this sketch updates it.
+Angle (deg)
+Angle (\xc2""\xb0"")
+Axis X
+Axis Y
+Axis Z
+Bottom radius
+Bottom \xc3""\x98"" (%s)
+Construction
+Copy, mirror, pattern or split the selection
+Custom
+Depth (Y)
+Depth (%s)
+Dir X
+Dir Y
+Dir Z
+Distance 2
+Distance B
+Draft Angle
+Drawing guides level, measure, look at the sketch plane
+Fit clearance (%s)
+Full
+Groove width (%s)
+Height
+Height (Z)
+Inference
+Major radius
+Max
+Minor radius
+Modify
+Modify tools: trim, copy, mirror, linear and circular 
+More
+Move, rotate or scale the selection
+Multiply
+Normal
+Off
+Offset Distance
+Origin X
+Origin Y
+Origin Z
+Pitch (%s)
+Pull
+Push
+Reduced
+Scale Factor
+Scale U (%)
+Scale V (%)
+Spacing X
+Spacing Y
+Spacing Z
+Src X
+Src Y
+Src Z
+Sweep (\xc2""\xb0"")
+Symmetric
+Tgt X
+Tgt Y
+Tgt Z
+Thickness
+Thickness (%s)
+Top radius
+Top \xc3""\x98"" (%s)
+Total Angle
+Type Width and Height, then Apply.
+Type a value and press Enter. The shape extends from your first click toward the cursor.
+Type the straight-line distance between the arc's two ends and press Enter - or just click the end.
+Type the swept angle and Enter. 180 is a semicircle. Move the cursor across the chord to flip which way it bows.
+Width (X)
+deg
+\xc3""\x98"" (mm)
+Build a solid from silhouette sketches. Select two or more closed sketches on different planes (e.g. top + front + side outlines of the part) and click: each sketch is extruded through the others and the result is their intersection - the solid that matches every outline. Order doesn't matter.\n\nClassic use: a base footprint plus curved front/side profiles gives a tapered body with rounded sides. Also the way to reconstruct an object from traced reference photos.
+Loft a solid through two or more sketch profiles. Ctrl-click each sketch (or region) in order - first to last is the skinning order - then click Loft. With one selected, you'll be prompted to pick more.\n\nGUIDED MODE: select ONE closed profile plus 1-2 OPEN curves and the profile is swept up along them - draw each curve as a side silhouette rising from the base (a slanted line = straight taper, an arc = rounded side). Strokes past the peak are ignored.\n\nBest results when the profiles sit on PARALLEL planes with similar topology (all rectangles, all circles, etc.). Profiles on perpendicular planes or with very different vertex counts produce a tent / pyramid surface - that's the loft algorithm being honest, not a bug. For floor-to-vertical transitions, a Sweep along a guide curve is usually what you want instead.\n\nSections can be SKETCHES or FACES -- pick two faces to loft straight between them, which avoids the profile-building step entirely.
+Edge
+%d %s(s) selected
+Confirm
+Confirm (Enter)
+Cancel (Esc)
+Add a reference image to this plane
+Pick a photo or drawing to trace over. It appears on the plane straight away, so you can set the alignment, offset and real-world scale with the image in view.
+%d x %d px
+Undo every rotation applied so far and return the plane to its chosen alignment and offset.
+Return the plane to its chosen alignment and offset, with no tilt.
+Size, opacity and Calibrate are in the Reference Image panel.
+After creating the plane, pick a photo or drawing to trace over. Set its real size with Calibrate.
+New Plane with Reference Image...
+Creates a ground plane carrying a traceable photo. To put an image on any other plane, create the plane first and use Attach Image in its properties.
+Attach Image...
+Replace Image...
+Remove Image
+Put a traceable photo or drawing on this plane. Set its real size with Calibrate, then sketch over it.
+Detach the image. The construction plane itself stays.
+Place at
+Leading edge
+Quarter chord
+Centre
+Which point of the section lands on your click, and what it rotates about. Stacked wing stations normally align on the leading edge; the quarter chord is the usual spar position.
+Bring outside artwork into the sketch: an SVG outline or an aerofoil section
+Airfoil Section
+(unnamed section)
+%.1f%% thick, %.1f%% camber, %d + %d points
+Airfoil
+Points per surface
+Done
+Blunt trailing edge - closed with a straight segment.
+Click in the sketch to place the leading edge (Backspace undoes the last).
+Chord length: the straight distance from the leading edge to the trailing edge. The section is scaled to it.
+Spline control points per surface. Published sections carry far more than the shape needs; fewer points solve and rebuild faster.
+Language
+Choose your language
+Menus and tool names are translated. Some longer help text is still English.
+Appearance
+Interface language
+Place a standalone point. Snaps to existing points, lines and curves like every other sketch tool.
+Mesh trace setup
+Finish the current tracing-plane setup first.
+Set Up Tracing Planes only works on an imported mesh body.
+Couldn't set up tracing planes for that mesh.
+This plane has no paired sketch to insert into.
+No closed silhouette here - the mesh may be open/non-manifold from this direction.
+No closed cross-section here - move the plane through the mesh first.
+Slice position
+Slides the plane along its own normal through the mesh - same as dragging its move gizmo, just bounded to where the mesh actually is.
+Source mesh not found.
+Capture
+Cross-section
+Exactly what the plane cuts through right now - precise, but only the one slice.
+Shadow
+The whole mesh's silhouette flattened onto the plane, like a shadow - use it to trace an outline whose depth varies, instead of hunting for the one slice that catches it.
+Insert Outline into Sketch
+Appends the CURRENT capture's closed loops as real lines into this plane's sketch. Additive - move the plane (or reposition/re-orient) and click again to capture another slice into the same sketch.
+Remove Trace
+Removes the tracing underlay. The plane and its sketch are kept - delete those separately if you don't want them either.
+Move with the gizmo like a construction plane, or use the slider above. Sketch on it to trace.
+Position each plane (drag its gizmo, or use Slice position below), pick Cross-section or Shadow, then Place Sketch. The overlay is a live preview - nothing is real geometry until you place it.
+Top
+Front
+Place Sketch
+Bakes the CURRENT preview into this plane's sketch as real, editable lines. Click again after repositioning to add another slice.
+Closes this dialog. Every plane keeps whatever you placed (or didn't) - re-select a plane any time to adjust it further.
+Undoes this whole setup - removes all 3 planes and sketches, re-shows the mesh. Same as Ctrl+Z right after running Set Up Tracing Planes.
+Rotate (degrees)
+Send to Open Project
+%zu bodies
+Total: %s
+Autosave on close
+Saves the project automatically when you close it or quit, once it has been saved to a file at least once - no prompt needed. Crash recovery is separate and always on.
+How long a fillet may take before it is refused. OCCT's blend cannot be cancelled once started, so a fillet is first run on a background copy and abandoned if it exceeds this. Raise it for large or heavy bodies where fillets legitimately take longer; lower it if a fillet that cannot be built keeps you waiting.
+Import an aerofoil section (Selig or Lednicer coordinates, e.g. from airfoiltools.com): pick the file, set the chord in the popup, click to place the leading edge. Stack sections on planes and Loft for a wing.
+The section's own trailing edge has thickness, which is what you want for a printed or machined part; a knife edge cannot be manufactured.
+Repair
+Set Up Tracing Planes
+Offset a chain: click an edge to take the whole connected run, then move the cursor or type a distance. Which side you are on picks the direction.
+Hover a line, arc or circle - the whole connected chain highlights. Click to choose it.
+Move the cursor to set the distance; the side it is on picks the direction. Click or press Enter to place it.
+Put the offset on the other side of the chain.
+Round corners
+Sharp corners
+Round bridges an opening corner with an arc; Sharp extends both edges to their intersection.
+Offset created - 1 new element
+Offset created - %d new elements
+Nothing to offset
+Offset distance is zero
+Offset distance is larger than the circle
+Offset distance is too large for this profile
+Local (rebuild neighbours)
+Off: the whole body shears, so holes and features inside it lean with the face.\nOn: only the faces touching this one are rebuilt - everything else stays put.\nThe face you tilt has to be flat; what it meets can curve.
+The face moved and only the faces meeting it were rebuilt - the rest of the body is untouched.
+Patch
+Sew
+Boundary edges: %d
+Continuity
+Continuity: %s
+Position (C0)
+Tangent (G1)
+Curvature (G2)
+Fit: gap %.4f mm, tangency %.2f deg
+Gap %.4f mm  -  tangency %.2f deg
+Sewn into the body.
+No surface fits these edges.
+Standalone surface (the edges\ndon't bound one body).
+This body is already closed, so there's nothing to sew into - the patch lands as its own surface. A hole that goes right through needs both ends capped, then Sew.
+The patch wouldn't join the opening, so it lands as its own surface - the fitted edge may not reach the rim.
+No tangent surface exists here - the faces\naround the opening stand square to it.\nThe hole is filled, held in position only.
+%d edge(s) have no neighbouring face, so\nthey only hold position.
+%d picked support face(s)
+Advanced
+Max degree
+Max segments
+Iterations
+Stiffness
+Anisotropic
+Gap tolerance (mm)
+Tangency tolerance (deg)
+Curvature tolerance
+Sample points per boundary curve. More follows the rim more closely; fewer smooths it out.
+Degree of the surface the fit starts from. Higher lets it bulge more freely - and invent waves the boundary never asked for.
+Let the fit stretch differently along and across the patch. Helps on long thin openings.
+Faces sewn: %d
+Closed - this is a solid.
+%d edge(s) still open.
+Joined at %.4f mm.
+Standard (V)
+Trapezoidal (ACME)
+Square
+Buttress
+Rounded (print)
+Pliable
+Semi-rigid
+Rigid
+Spline, Polygon, Trim, Offset) are on the toolbar only.
+Scale (target %s)
+Scale (%% of current)
+Boolean
+Boundary Fill
+Assembly
+AI Assistant
+Open the AI Assistant chat.
+Provider
+OpenAI-compatible (OpenAI/Ollama/LM Studio)
+API Key
+Model
+Base URL
+Point the base URL at http://localhost:11434/v1 for Ollama, or LM Studio's local server address, to run without any cloud key.
+Test Connection
+Testing...
+Connection OK.
+Failed: %s
+Clear Chat
+You: %s
+AI: %s
+Thinking... %.0fs
+Set up your API key in Settings -> AI Assistant.
+Send
+Stop
+Mate
+Mates
+Fasten
+Planar
+Suppress
+Mates not applied: %s
+%s (reference lost)
+%s: body %d -> body %d
+Position one body against another and keep the relationship. Pick the body that stays put first, then the one that moves.\n\nThe mate type is inferred from what you picked - two round faces give Concentric, two flat faces give Planar, anything else Fasten - and you can change it afterwards. Editing the reference body carries everything mated to it along.
+%s already has a mate (to %s) - a body can only be placed by one. Edit or delete that mate in the Mates section below first, or pick the bodies in the other order if you meant to mate %s to it instead.
+%s is now mated to %s (Fasten). It's holding its current position - nothing moved. Open the Mates section below to set an offset, or pick faces on both bodies first for a Planar / Concentric mate that aligns them.
+%s is now mated to %s (%s), aligned to the picked faces. Adjust offset, roll or Flip in the Mates section below.
+Only Fasten is available: these bodies have no sketch-derived faces to align to. Primitive and imported bodies cannot carry face references.
+Only available with anchored faces: a rotation or flip recaptured from this body's current (already-rotated) position, instead of a real face's orientation, would silently compound on the next solve.
+Fill an opening with a single fitted surface. Ctrl-click the ring of edges around the void and click Patch: the surface is fitted across them and, if they bound a hole in one body, sewn back in so the body closes.\n\nCONTINUITY is the point of the tool. Position just plugs the hole. Tangent leaves the rim along the surrounding faces, so there is no crease where the patch meets them. Curvature matches how those faces are bending as well, for a blend that reads as one surface.\n\nTangency needs something to be tangent TO: where the faces around the opening stand square to it - a flat lid on vertical walls - there is no tangent surface to find, and the panel says so rather than pretending. Slope those walls even a few degrees and it works.\n\nSelect faces as well as edges to say which side a bridging patch should blend into.
+Stitch surfaces into one body - and into a solid when they close.\n\nSelect the surfaces (Patch results, imported shells) and click. Faces that meet are joined; if the result encloses a volume you get a solid you can fillet, shell and boolean like any other. If it doesn't, you get the joined shell and a count of the edges still open, which is how many gaps are left to patch.\n\nJoined at the tightest tolerance that closes, so surfaces that only nearly meet are not silently welded together.
+Could not open the image file.
+Could not use this image - it must be a PNG / JPEG / BMP no larger than 16384 x 16384.
+Reference image replaced.
+Reference image attached - set its real size with Calibrate, then sketch over it.
+Reference image imported - set its real size with Calibrate, then sketch over it.
+Could not decode the image for calibration.
+Image calibrated to real size.
+Imported STL - %d faces (simplified %d \xe2""\x86""\x92"" %d triangles). Pick a flat face \xe2""\x86""\x92"" Sketch on Face to trace it.
+Imported STL - %d faces. Pick a flat face \xe2""\x86""\x92"" Sketch on Face to trace it.
+STL import failed: %s
+Select a body, or pick the faces of one panel, to unfold.
+Select a body to unfold.
+Couldn't unfold that: %s
+nothing to flatten.
+No faces to unfold.
+No planar faces to unfold.
+Some non-planar faces were skipped.
+Some faces weren't connected to the main piece.
+The flattened net overlaps itself - it may need to be cut into pieces.
+Nothing to tessellate.
+Nothing to unfold.
+Couldn't read \"%s\" - access may have been revoked.
+Couldn't read \"%s\" for export.
+\"%s\" has no bodies to export.
+Exported %s
+Export failed - see log
+Couldn't read \"%s\".
+\"%s\" has no parts to import.
+Save or close the open project first.
+Imported 1 part from %s
+Imported %d parts from %s
+Those bodies have no geometry.
+Those sketches have no geometry.
+Opened in a new tab - unsaved.
+%d parts opened in a new tab - unsaved.
+%d sketches opened in a new tab - unsaved.
+Sent to %s - drag to place.
+%d parts sent to %s - drag to place.
+Sent to %s.
+%d sketches sent to %s.
+No file-dialog program found - install 'zenity' (GNOME) or 'kdialog' (KDE) to Open / Save / Export.
+That project is already open - switched to its tab.
+Finish or cancel the sketch before switching tabs.
+Wait for the thread re-cut to finish before switching tabs.
+Couldn't reopen the last project - access may have been revoked.
+Opened a local backup - the original is gone. Save to keep it.
+1 project from your last session is missing.
+Some projects from your last session are missing.
+Saved %s
+Save failed - see log
+Couldn't write the original file - choose where to save
+This project was saved in an older format: %d body(ies) are frozen and can't be edited by value. The shapes are intact - to change a baked round/chamfer, select its face and use Remove Feature to restore the sharp edge, then redo it. New saves won't have this.
+This project was saved in an older format: %d feature(s) are frozen and can't be edited by value. The shapes are intact - to change a baked round/chamfer, select its face and use Remove Feature to restore the sharp edge, then redo it. New saves won't have this.
+Couldn't open \"%s\" - access may have been revoked.
+Opened a local backup of \"%s\" - the original is gone. Save to keep it.
+Failed to open \"%s\".
+Couldn't open \"%s\" - the file may have moved or been deleted.
+Import failed.
+Import cancelled.
+Import failed partway through - kept the bodies added before the error.
+Can't export to %s.
+Nothing to export - those bodies have no geometry.
+Combine needs sketches that share a plane.
+Duplicated \"%s\" - edit the copy freely (e.g. resize holes); the original is untouched.
+Can't sketch on a curved face - use Add Plane\xe2""\x80""\xa6"" to place a construction plane.
+Couldn't reopen the unfinished sketch's tab; it's still saved.
+Recovered %d projects.
+Recovered unsaved work into a new tab.
+%d recovered project(s) couldn't be reopened.
+Thank you for supporting Materializr!
+A step was skipped after an error - save a copy.
+Not an airfoil file: %s
+could not open the file
+not enough lines to be a coordinate file
+no coordinates after the header
+fewer coordinates than the count line promises
+too few coordinate pairs
+could not find the leading edge (is this a Selig file?)
+not enough points on one of the surfaces
+coordinates are not chord-normalised (expected x from 0 to 1)
+Those faces point in opposite directions - they lie in the same plane, but the material is on opposite sides, so they are different surfaces of the part rather than two halves of one. Merging can't join them, and wouldn't add material to either.
+Those faces don't touch - merging dissolves the edge between two faces, and there isn't one. If a small step separates them, level it first, then merge.
+That merge would have moved material, so it was refused - the faces are one surface, but joining them would reshape the part rather than tidy it.
+Couldn't find those faces on the body any more - they may already have been merged.
+Pick two or more faces on the SAME body to merge them.
+Couldn't merge those - they aren't close enough to one surface, or the merge wouldn't hold together.
+Nothing exactly coplanar left to merge - pick the faces either side of a seam and try again.
+%d open sketch(es) ignored - rails need exactly ONE closed base profile.
+Guided loft takes at most two rail curves - deselect the extras.
+Selected %d closed profile(s) + %d open curve(s). Loft needs 2+ closed profiles (sections), or exactly 1 closed + 1-2 open (rails).
+%d empty sketch(es) skipped.
+Guided loft failed - rails must rise away from the base profile's plane.
+Sketch re-linked - editing it will drive the body again.
+Updated the sketch, but the body built from it couldn't rebuild from the new shape - the model is unchanged.
+Couldn't update the model for that sketch change - a downstream feature (step %d: %s) couldn't follow it, so the model was left unchanged.
+Couldn't update the model for that sketch change - a downstream feature couldn't follow it, so the model was left unchanged.
+step %d
+Model updated - but %s couldn't follow the change and was DISABLED. Its edge/face picks no longer exist on the new shape - delete it and re-apply the feature (re-enabling would retry the old picks).
+Boundary Fill needs at least two sketches with a closed region (e.g. top + front + side silhouettes).
+Boundary Fill: the silhouettes don't enclose a common volume - make sure they overlap in space.
+Patch needs the edges around the opening - Ctrl-click each one, then click Patch.
+Patch: no surface fits these edges. They need to form one closed ring around the opening.
+Sew needs the surfaces selected - pick the bodies to stitch together, then click Sew.
+Sew: those surfaces wouldn't join - they may not touch anywhere, or there was nothing to stitch.
+Sewed %d faces into a solid.
+Sewed %d faces, but %d edge(s) are still open - it isn't a solid yet.
+Thread couldn't re-cut on the new geometry - check the Thread step.
+Thread re-cut cancelled - the Thread step is suspended; re-enable it in History to re-cut.
+That operation
+A boolean
+%s needs solid geometry, and this is an imported mesh - a reference body. Sketch on it and snap to it all you like, then model the part alongside it.
+%s needs solid geometry, and one of the selected bodies is an imported mesh - a reference body. Leave the import out of the selection.
+Can't extrude a curved face - extrude works on flat faces only.
+Subtract: this profile doesn't reach any body - nothing to cut. Extrude it further, or drag the other way.
+Cut %d of %d bodies - the rest couldn't make a valid solid and were left alone.
+Push/Pull works on flat faces - not curved or fillet faces.
+This fillet can't be rebuilt on the current body - its edges reference geometry that a later feature changed. Left as-is; delete it and re-apply the feature on the updated body.
+This chamfer can't be rebuilt on the current body - its edges reference geometry that a later feature changed. Left as-is; delete it and re-apply the feature on the updated body.
+This fillet/chamfer is baked into the model - the geometry you clicked has no editable operation behind it. Re-apply it to make it adjustable.
+Fillet couldn't be built on those edges - the result wasn't valid geometry. Try a smaller size or fewer edges.
+Chamfer couldn't be built on those edges - the result wasn't valid geometry. Try a smaller size or fewer edges.
+Only simple through-holes can be moved for now - not pockets, countersunk, or stepped holes.
+Move Face needs a flat face - pick a planar face.
+Hollow body: the preview stays put - the change applies when you release (re-shelled automatically).
+Union couldn't make a valid solid from these bodies - they may not overlap, share a coincident face, or the geometry is too degenerate.
+Intersect couldn't make a valid solid from these bodies - they may not overlap, share a coincident face, or the geometry is too degenerate.
+Subtract couldn't make a valid solid from these bodies - they may not overlap, share a coincident face, or the geometry is too degenerate.
+Same entity - pick a different one.
+These lines can't be dimensioned to each other (they meet, or are collinear).
+That pair can't be dimensioned.
+A single point has no dimension - pick a second entity.
+Distance per side (%s)
+Distance (%s) - signed
+Fix up geometry: fill an opening, stitch surfaces into a solid, merge split faces, or take a feature back off
+Some faces are doubly-curved - score/fold lines approximate the curvature.
+None
+3D printing
+Metal
+Other
+Colour
+Density: %s
+Resin (SLA)
+Aluminium
+Steel
+Stainless steel
+Brass
+Copper
+Titanium
+Plywood
+Hardwood
+Acrylic
+Carbon fibre
+Foam board
+Volume: computing...
+Not a closed solid - no volume or mass.
+Volume: %s
+Mass: %s
+Pick a material to see the mass.
+Infill %
+Walls
+Printed mass: ~%s
+Solid: %s
+Estimated the way a slicer counts it: the walls and the top and bottom skins are solid (each wall is a %s line), the inside is filled at the infill percentage. Supports, brim and purge are not included.
+Appearance: %s
+Materials
+Photo studio reflections
+Metal and varnished wood reflect a photographed studio. Off: a plain drawn studio instead.
+Fill
+Fill closed regions for SVG and DXF export (laser engraving): tap a region to fill it, tap again to clear. Cosmetic only - it never affects Extrude, Push/Pull or anything else you model.
+Fill closed regions for SVG and DXF export (laser engraving): click a region to fill it, click again to clear. Cosmetic only - it never affects Extrude, Push/Pull or anything else you model.
+Fill needs a closed region - click inside a closed shape.
+Modify tools: trim, offset, fill, copy, mirror, linear and circular patterns
+Bring the panels back
+Cancel the in-progress shape
+Circle origin: Center = click the centre, drag the radius; 2-Point = the two clicks are opposite ends of the diameter (rim passes through the first click). Click to toggle.
+Rectangle origin: Corner = click a corner, drag to the opposite; Center = click the centre, drag to a corner. Click to toggle.
+Cut a helical screw thread into the picked cylindrical face - external on a boss, internal in a hole. Pitch / depth / handedness in the popup.
+Delete the picked face and heal the body over it - takes a baked fillet or chamfer back to a sharp edge so it can be re-applied.
+Delete the picked face(s) and heal the surrounding faces back together - take a baked fillet/chamfer back to a sharp edge so it can be re-applied, or clean a round/hole off an imported part.
+Diameter
+Dimension
+Disable
+Enable
+Draft angle for moulding or printing: tilt the picked face(s) by an angle about a fixed neutral plane. Unlike Rotate it takes SEVERAL faces at one angle (all four walls of a box) and works on cylindrical and conical faces too - a cylinder drafts into a cone.
+Drag the face along its normal to extrude (+) or cut (\xe2""\x88""\x92"") into the body.
+Draw from: Corner
+Draw from: Center
+Draw from: 2-Point
+Edit Chamfer
+Edit Fillet
+Finish the sketch and leave sketch mode
+Flatten the SELECTED faces into a 2D pattern (cut + fold lines) for a laser/CNC/printed template. Pick the faces of one panel (e.g. a skin) - unfolding a whole closed body rarely makes sense.
+Focus: hide the side panel (tap again for viewport only)
+Focus: hide the tool rail too (viewport only)
+Folder colour
+Fully constrained
+Under-constrained
+Over-constrained
+Hide the history timeline
+Show the history timeline
+Hide the model tree
+Show the model tree (bodies, sketches, construction)
+Hollow the body, removing the picked face. Wall thickness in the popup.
+Import an aerofoil section (Selig or Lednicer coordinates from airfoiltools.com): pick the file, set the chord in the popup, tap to place the leading edge.
+Import SVG
+Inferences: Full
+Inferences: Reduced
+Inferences: Off
+Inferences: Max
+Leave sketch mode, keeping the sketch
+Look At
+Make a NEW body by extruding this face's silhouette (source body unchanged).
+Merge faces that are really one surface into one face. Imported STEP parts arrive with flat surfaces split into pieces - the seam lines across an otherwise flat face, which also confuse Unfold and sketch-on-face.
+Offset a chain: tap an edge to take the whole connected run, then drag or type the distance. The side you are on picks the direction.
+Project
+Project a sketch onto this face along the sketch's normal, then engrave (cut in) or emboss (raise out) to a depth - wrap a logo or text onto a cylinder. Sketch, mode and depth in the popup; click sketch regions in the viewport to project only those.
+Resize a cylindrical hole / pin to an exact diameter.
+Re-slope the side walls toward a scaled copy of this face - under 100% tapers it in, over 100% flares it out. Blend length in the popup.
+Select / Move
+Snap off - tap for step / toggle
+Snap ON - tap for step / toggle
+Start a new sketch lying on the picked face.
+SVG
+Throw the sketch away and leave (asks to confirm)
+Trim
+Unfold
+New Sketch
+Sketch on selection
+Export Sketch as SVG
+Export Sketch as DXF
+Filled regions: %d
+Fills in grey
+Writes filled regions in grey so they stay distinct from the black outlines. Laser software can give each colour or layer its own operation, e.g. cut the outlines and engrave the grey. In SVG a fill is a solid shape; DXF has no solid fill, so it is written as closed outlines on a separate FILL layer. Off: fills keep the outline colour.
+Save project
+Open project
+Import STEP
+Export STEP
+Duplicate the selection in place
+Delete the selection
+Next project tab
+Previous project tab
+Reset the camera
+Frame the selection (or everything, if none)
+Hide / restore the side panels
+Gizmo: translate
+Gizmo: rotate
+Gizmo: scale
+Dimension tool
+Ctrl
+Shift
+Alt
+Tab
+Left Arrow
+Right Arrow
+Up Arrow
+Down Arrow
+Page Up
+Page Down
+End
+Insert
+Backspace
+Esc
+Click a shortcut, then press the new key combination. Esc cancels. A combination already in use is taken from its old action. Esc, Enter and Space cannot be assigned.
+That key combination is reserved.
+Taken from: %s.
+Press a key...
+Unassigned
+Reset all shortcuts
+Keyboard shortcuts can be changed in Settings \xe2""\x86""\x92"" Navigation.
+While a tool is running
+In a sketch
+Touch
+Commit the running tool (and typed value)
+Cancel the running tool or gizmo drag
+Remove the last spline point or stamp
+Cancel the shape; again to leave the sketch
+Finish the spline being drawn
+Right-click
+Constraints menu (needs a selection)
+Middle-drag
+Shift+Middle-drag
+Right-drag
+Left-drag
+Pan (always, whatever the buttons are)
+Scroll
+Zoom toward the cursor
+Left-click
+Select a face or sketch region
+Box-select (on empty space)
+Select the whole body
+Context menu
+Tap
+Double-tap
+One-finger drag
+Two-finger drag
+Long-press
+Scale grid with zoom
+On (default): the step you pick below is a starting point. When the grid cells would be too small to click, the sketch uses a coarser step (0.1, 0.5, 1, 5, 10 ...), and a finer one when you zoom well in. The number on the badge shows the step in use. Off: the grid and snapping always use exactly the step you picked, at every zoom.
+Step switch size
+How wide a grid cell may get before the step changes while you zoom. Higher = coarser grid, steps change sooner when zooming out. Lower = finer grid. Default 8.
+Grid step scaling lives in the snap popup (click the grid badge in the viewport).
+Interface scale
+Makes the whole interface larger or smaller: text, buttons, spacing and panels together. 100% is the size picked for your display. Takes effect on restart.
+Touch mode sets its own size, so this is off while Touch mode is on.
+This launch was started with --ui-scale, which takes priority.
+Restart Materializr to apply the new size, then use Reset panel layout if the panels look cramped.
+Draw from
+2-Point
+Draw a circle: press the centre, drag to the radius. Tap again while it is active to choose Center or 2-Point.
+Draw a rectangle: press one corner, drag to the opposite. Tap again while it is active to choose Corner or Center.
+Draw a circle: click centre, drag to radius. Click again while it is active to choose Center or 2-Point (the two clicks are opposite ends of the diameter).
+Draw an axis-aligned rectangle: click one corner, drag to the opposite. Click again while it is active to choose Corner or Center (click the centre, drag to a corner).
+Construction geometry: reference lines that help you draw but are not part of the shape - they never affect extrudes or exports. With elements selected, tap to turn them into construction (or back). Otherwise tap to draw the next shapes as construction.
+Construction geometry: reference lines that help you draw but are not part of the shape - they never affect extrudes or exports. With elements selected, click to turn them into construction (or back). Otherwise click to draw the next shapes as construction.
+Two-finger tap
+Three-finger tap
+Orbit, or drive the running tool
+Pan or pinch-zoom

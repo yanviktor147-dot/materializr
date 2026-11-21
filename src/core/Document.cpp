@@ -258,7 +258,7 @@ int Document::addSketch(std::shared_ptr<materializr::Sketch> sketch, const std::
 }
 
 void Document::putSketch(int id, std::shared_ptr<materializr::Sketch> sketch,
-                         const std::string& name, int atIndex) {
+                         const std::string& name) {
     if (id < 0) return;
     int idx = findSketchIndex(id);
     if (idx >= 0) {
@@ -270,10 +270,7 @@ void Document::putSketch(int id, std::shared_ptr<materializr::Sketch> sketch,
         entry.name = name.empty() ? ("Sketch " + std::to_string(id)) : name;
         entry.sketch = std::move(sketch);
         entry.visible = true;
-        if (atIndex >= 0 && atIndex < static_cast<int>(m_sketches.size()))
-            m_sketches.insert(m_sketches.begin() + atIndex, std::move(entry));
-        else
-            m_sketches.push_back(std::move(entry));
+        m_sketches.push_back(std::move(entry));
     }
     // Keep freshly-assigned ids from colliding with a preserved (loaded) one.
     if (id >= m_nextSketchId) m_nextSketchId = id + 1;

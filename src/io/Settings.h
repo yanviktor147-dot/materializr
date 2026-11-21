@@ -75,9 +75,6 @@ struct AppSettings {
     float touchRightW       = 300.0f;
     // Shell tool-rail width, same convention (edge-tab drag).
     float touchRailW        = 92.0f;
-    // User-arranged tool-rail order (Modern / im-touch), serialized by
-    // touchui::RailOrder: "ctx=key|key;ctx2=key|key". Empty = catalogue order.
-    std::string toolOrder;
 #if defined(MZ_MOBILE)
     // Touch-first default: trackpad mode (one-finger drag = orbit, two-finger
     // pan/zoom). Just the first-run default - the Settings dialog can rebind to
@@ -95,9 +92,6 @@ struct AppSettings {
     // snappier. Persisted so the user doesn't have to re-set it every launch.
     float mouseSensitivity  = 1.0f;
     bool autosaveEnabled    = false; // save automatically on project/tab close
-    bool deleteSketchRemovesBodies = false; // deleting a sketch also deletes the bodies it created
-    bool autosavePeriodic   = false; // also re-save a saved project every autosaveIntervalMin
-    int  autosaveIntervalMin = 5;
     bool invertCubeDrag     = false; // ViewCube drag-to-orbit direction
     // Max seconds between two clicks for them to register as a double-click
     // (ImGui default 0.30). Trackpad users often double-tap slower than a
@@ -199,17 +193,6 @@ struct AppSettings {
     // body/sketch gizmo translate. Persisting these means the user doesn't
     // have to re-enable snap and re-pick a 1 mm step every launch.
     bool  snapToGrid    = true;
-
-    // --- Remembered UI state (1.8.0-beta.5 tester list) ---
-    // Which sections of the logo menu (Modern / im-touch) are expanded, one bit
-    // each: File 1, Edit 2, View 4, Help 8. Closed to start; what the user opens
-    // stays open across launches.
-    int   menuSectionsOpen = 0;
-    // The two-way switches on the drawing tools and primitives, packed so a new
-    // one costs a bit, not a settings key (bit layout: Application::packToolSwitches):
-    // rect from centre, circle from 2 points, circle diameter, arc by radius,
-    // polygon diameter, polygon inscribed, corner chamfer, primitive diameter.
-    int   toolSwitches = 0;
     // Largest grid step accepted from a file, in display units. A huge finite
     // value makes framing unusable and a NaN reaches an int conversion in the
     // renderer, so both are rejected rather than clamped.

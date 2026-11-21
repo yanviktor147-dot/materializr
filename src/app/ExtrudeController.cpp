@@ -103,7 +103,7 @@ int ExtrudeController::resolveCutTarget(const IopContext& ctx) const {
 bool ExtrudeController::beginExtrude(const IopContext& ctx,
                                      const TopoDS_Shape& profile,
                                      ExtrudeMode mode, int targetBody,
-                                     int sourceSketchId, SketchScope scope) {
+                                     int sourceSketchId) {
     // Extrude sweeps a profile along its normal - only meaningful for a FLAT
     // profile. A single curved body face (cylinder / sphere / fillet) has no
     // single normal, so extruding it produced garbage geometry; refuse with
@@ -124,7 +124,6 @@ bool ExtrudeController::beginExtrude(const IopContext& ctx,
     m_mode = mode;
     m_targetBody = targetBody;
     m_sketchId = sourceSketchId;
-    m_scope = scope;
     return begin(ctx);
 }
 
@@ -188,7 +187,6 @@ std::unique_ptr<Operation> ExtrudeController::buildOp(const IopContext& ctx) {
     op->setDistance(opDistance());
     op->setMode(ExtrudeMode::NewBody);
     op->setSketchSource(m_sketchId);
-    op->setSketchScope(m_scope);
     return op;
 }
 
@@ -274,7 +272,6 @@ void ExtrudeController::commitCutAll(const IopContext& ctx,
         op->setMode(ExtrudeMode::Subtract);
         op->setTargetBody(id);
         op->setSketchSource(m_sketchId);
-    op->setSketchScope(m_scope);
         if (ctx.history.pushOperation(std::move(op), ctx.doc)) ++done;
     }
     std::fprintf(stdout, "Subtracted %.1f mm from %d of %zu bodies\n",
@@ -306,7 +303,6 @@ std::unique_ptr<Operation> ExtrudeController::buildCommitOp(const IopContext& ct
     op->setMode(ExtrudeMode::Subtract);
     op->setTargetBody(m_targetBody);
     op->setSketchSource(m_sketchId);
-    op->setSketchScope(m_scope);
     std::fprintf(stdout, "Subtracted %.1f mm from body %d\n",
                  std::abs(m_distance), m_targetBody);
     return op;
@@ -445,7 +441,7 @@ void ExtrudeController::renderExtrudePanel(const IopContext& ctx) {
     } else {
         // The member is the truth; the buffer follows it unless being typed in.
         materializr::reseedLengthBufferIfIdle("##dist", m_inputBuf, sizeof(m_inputBuf), m_distance);
-        if (materializr::lengthNumberText("##dist", m_inputBuf, sizeof(m_inputBuf),
+        if (materializr::inputNumberText("##dist", m_inputBuf, sizeof(m_inputBuf),
                              ImGuiInputTextFlags_EnterReturnsTrue)) {
             // Enter pressed - commit (parseFinite: keep last on garbage)
             (void)materializr::parseLength(m_inputBuf, m_distance);
@@ -469,9 +465,9 @@ void ExtrudeController::renderExtrudePanel(const IopContext& ctx) {
     }
 
     // Quick-nudge stepper (replaces the slider): ±10/1/0.1, and 0 to clear
-    // the extrusion mid-preview. All layouts: im-touch has the well too, but the
-    // fixed nudges are quicker than a keypad for small corrections.
-    if (materializr::lengthStepperRow("extrudeStep", &m_distance,
+    // the extrusion mid-preview. Desktop only - im-touch stays a single well.
+    if (!imTouch &&
+        materializr::lengthStepperRow("extrudeStep", &m_distance,
                                 /*allowNegative=*/true, -50.0f, 50.0f)) {
         materializr::formatLengthDigits(m_inputBuf, sizeof(m_inputBuf), m_distance);
         updateExtrude(ctx, /*applySnap=*/false);  // steppers override the grid
@@ -537,7 +533,6 @@ void ExtrudeController::onCleanup() {
     m_sweepSign = 1.0;
     m_cutAllBodies = false;
     m_sketchId = -1;
-    m_scope = SketchScope::Whole;
 }
 
 } // namespace materializr

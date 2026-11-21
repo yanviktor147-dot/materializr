@@ -32,7 +32,6 @@
 #include "ui_scale.h"
 
 #include <imgui.h>
-#include <set>
 #include <string>
 #include "../../../i18n.h"
 #include "../../../i18n.h"
@@ -155,20 +154,34 @@ void Application::renderModernLayout() {
                      touchui::pillButtonWidth(MZ_ICON_DISCARD, exitLbl) + sp * 2;
         if (showMulti)
             total += touchui::pillButtonWidth(MZ_ICON_SELECT, materializr::tr("Multi")) + sp;
-        // Logo menu button (top-left): the emblem IS the menu, then the tab row.
+        // ⋯ menu (top-left, nav-drawer style), then logo chip + name + /project.
         {
             const float bh0 = 44.0f * s;
+            const float menuW = bh0 + 12.0f * s;    // ⋯ button + gap
             ImGui::SetCursorPos(ImVec2(pad, (topH - bh0) * 0.5f));
-            if (layoutui::logoMenuButton("logomenu", bh0))
+            if (touchui::iconButton("overflow", MZ_ICON_MORE, bh0))
                 ImGui::OpenPopup("##TouchOverflow");
             tip(materializr::tr("Menu: file, edit, view, help and settings"));
             renderTouchOverflowPopup();
 
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 win = ImGui::GetWindowPos();
+            const float chip = 30.0f * s;
+            const float lx = pad + menuW;
+            const ImVec2 c0(win.x + lx, win.y + (topH - chip) * 0.5f);
+            dl->AddImageRounded(layoutui::logoTexture(), c0,
+                                ImVec2(c0.x + chip, c0.y + chip),
+                                ImVec2(0, 0), ImVec2(1, 1),
+                                IM_COL32_WHITE, 7.0f * s);
+            ImGui::SetCursorPos(ImVec2(lx + chip + 10.0f * s,
+                                       (topH - ImGui::GetTextLineHeight()) * 0.5f));
+            ImGui::TextColored(touchui::textPrimary(), "%s", materializr::tr("Materializr"));
             // The old "/ projectname" breadcrumb is now the tab row: one pill
             // per open project (dirty dot included), right-click/long-press
             // for Save / Save As / Close, and a trailing "+".
             const float pillH = 30.0f * s;
-            ImGui::SetCursorPos(ImVec2(pad + bh0 + 12.0f * s, (topH - pillH) * 0.5f));
+            ImGui::SameLine(0.0f, 12.0f * s);
+            ImGui::SetCursorPosY((topH - pillH) * 0.5f);
 
             // The strip is BOUNDED. `total` (measured above) is where the
             // right-hand cluster begins; the "+" and a divider sit just inside
@@ -379,7 +392,7 @@ void Application::renderModernLayout() {
         if (beginFlushBar("##TouchRail",
                           kShellWindowFlags & ~ImGuiWindowFlags_NoScrollbar)) {
             ImGui::SetCursorPosX(10.0f * s);
-            touchui::sectionHeader(materializr::tr("Tools"));
+            touchui::sectionHeader("Tools");
 
             // TWO-COLUMN GRID when the rail is dragged wide: dragging wider
             // used to just stretch the same buttons into slabs; past the
@@ -536,44 +549,16 @@ void Application::renderModernLayout() {
                     else handleToolAction(static_cast<int>(t.action));
                 };
 
-                // One entry per rail button: a plain tool, or a whole group
-                // (placed where its first member sat). The user can drag
-                // entries into their own order (long-press, see RailOrder).
-                struct Entry { std::string key; int group; const Toolbar::RailTool* tool; };
-                std::vector<Entry> entries;
-                {
-                    bool added[5] = { false, false, false, false, false };
-                    std::set<std::string> seen;
-                    for (const auto& t : rail) {
-                        if (skip(t)) continue;
-                        const int g = groupOf(t);
-                        // Only collapse when the group actually has 2+ members
-                        // in this context; a lone Mirror stays a plain button.
-                        if (g != 0 && count(g) >= 2) {
-                            if (added[g]) continue;
-                            added[g] = true;
-                            const char* gName = g == 1 ? "Multiply"
-                                              : g == 2 ? "Transform"
-                                              : g == 4 ? "Repair" : "Import";
-                            entries.push_back({ std::string("group:") + gName, g, nullptr });
-                            continue;
-                        }
-                        std::string k = std::string(t.pluginIndex >= 0 ? "p:" : "a:") +
-                                        (t.label ? t.label : "");
-                        for (int n = 2; !seen.insert(k).second; ++n)
-                            k = k.substr(0, k.find('#')) + "#" + std::to_string(n);
-                        entries.push_back({ k, 0, &t });
-                    }
-                }
-                std::vector<std::string> entryKeys;
-                for (const auto& e : entries) entryKeys.push_back(e.key);
-                const auto order = m_railOrder.arrange(
-                    std::string("modern/") + m_toolbar->contextKey(), entryKeys);
-
-                for (int oi : order) {
-                    const Entry& e = entries[oi];
-                    if (e.group != 0) {
-                        const int g = e.group;
+                bool done[5] = { false, false, false, false, false };
+                int railIdx = 0;
+                for (const auto& tool : rail) {
+                    if (skip(tool)) continue;
+                    const int g = groupOf(tool);
+                    // Only collapse when the group actually has 2+ members in
+                    // this context; a lone Mirror stays a plain button.
+                    if (g != 0 && count(g) >= 2) {
+                        if (done[g]) continue;
+                        done[g] = true;
                         const char* gIcon  = g == 1 ? MZ_ICON_COPY
                                            : g == 2 ? MZ_ICON_MOVE
                                            : g == 4 ? MZ_ICON_REPAIR : MZ_ICON_SVG;
@@ -585,11 +570,9 @@ void Application::renderModernLayout() {
                                            : g == 4 ? "##railRepair"
                                                     : "##railImport";
                         ImGui::PushID(2000 + g);
-                        m_railOrder.beginEntry();
-                        bool gClicked = touchui::railButton(gLabel, gIcon, tr(gLabel), false, cell(),
-                                                            false, /*hasMenu=*/true);
-                        gClicked = m_railOrder.item(e.key, gClicked);
-                        if (gClicked) ImGui::OpenPopup(gPopup);
+                        if (touchui::railButton(gLabel, gIcon, tr(gLabel), false, cell(),
+                                                false, /*hasMenu=*/true))
+                            ImGui::OpenPopup(gPopup);
                         tip(materializr::tr(
                             g == 3 ? "Bring outside artwork into the sketch: an "
                                      "SVG outline or an aerofoil section"
@@ -610,19 +593,13 @@ void Application::renderModernLayout() {
                         ImGui::PopID();
                         continue;
                     }
-                    const Toolbar::RailTool& tool = *e.tool;
-                    // Keyed by entry, not position: the id has to follow the
-                    // button when the user drags it to another slot.
-                    ImGui::PushID(e.key.c_str());
+                    ImGui::PushID(railIdx++); // labels can repeat across groups
                     // Circle / Rectangle / Polygon carry `menu`: a corner wedge
                     // on the button, and a second tap while active opens the
                     // origin / sides menu instead of the old extra toggle row.
-                    bool inZone = false;
-                    m_railOrder.beginEntry();
-                    bool clicked = touchui::railButton(
+                    const bool clicked = touchui::railButton(
                         tool.label, tool.icon, tr(tool.label), tool.active, cell(),
-                        false, tool.menu, &inZone);
-                    clicked = m_railOrder.item(e.key, clicked);
+                        false, tool.menu);
                     tip(materializr::tr(tool.tip));
                     if (tool.pluginIndex >= 0) {
                         if (clicked) m_toolbar->fireRailPlugin(tool.pluginIndex);
@@ -631,12 +608,11 @@ void Application::renderModernLayout() {
                     else if (tool.action == ToolAction::Rectangle ||
                              tool.action == ToolAction::Circle)
                         renderRailDrawOriginPopup(tool.action == ToolAction::Rectangle,
-                                                  tool.active, clicked, inZone);
+                                                  tool.active, clicked);
                     else if (clicked)
                         handleToolAction(static_cast<int>(tool.action));
                     ImGui::PopID();
                 }
-                if (m_railOrder.takeChanged()) saveAppSettings();
             }
 
             // Construction stays reachable with a selection too (its options
@@ -752,7 +728,7 @@ void Application::renderModernLayout() {
                     if (!stepEditing) {
                         const float footerTop = ImGui::GetCursorPosY();
                         ImGui::Separator();
-                        touchui::sectionHeader(materializr::tr("Properties"));
+                        touchui::sectionHeader("Properties");
                         // AutoResizeY (no max constraint) = exactly content
                         // height; NoScrollbar guarantees it never grows a
                         // scrollbar. History above already reserved this height

@@ -72,7 +72,6 @@
 #include "modeling/PushPullOp.h"
 #include "modeling/TransformOp.h"
 #include "modeling/SketchTransformOp.h"
-#include "core/SketchCascadeTarget.h"
 #include <gp_Quaternion.hxx>
 #include "modeling/PlaneTransformOp.h"
 #include "modeling/FilletProbe.h"
@@ -174,12 +173,7 @@ void Application::renderSettings() {
                     ImGui::SeparatorText(materializr::tr("Autosave"));
                     if (ImGui::Checkbox(materializr::tr("Autosave on close"), &m_autosaveEnabled)) changed = true;
                     ImGui::TextWrapped("%s", materializr::tr("Saves the project automatically when you close it or quit, once it has been saved to a file at least once - no prompt needed. Crash recovery is separate and always on."));
-                    if (ImGui::Checkbox(materializr::tr("Also autosave every few minutes"), &m_autosavePeriodic)) changed = true;
-                    ImGui::TextWrapped("%s", materializr::tr("Re-saves the project on a timer while it has unsaved changes, once it has been saved to a file at least once. Waits while a tool, a sketch or an undone step is open. Large projects can pause briefly while saving."));
-                    ImGui::BeginDisabled(!m_autosavePeriodic);
-                    if (ImGui::SliderInt(materializr::tr("Interval (min)"), &m_autosaveIntervalMin, 1, 30, "%d min")) changed = true;
-                    ImGui::EndDisabled();
-                    if ((m_autosaveEnabled || m_autosavePeriodic) && m_currentProjectPath.empty()) {
+                    if (m_autosaveEnabled && m_currentProjectPath.empty()) {
                         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "%s", materializr::tr("Save the project once to start autosaving."));
                     }
 
@@ -272,13 +266,6 @@ void Application::renderSettings() {
                     ImGui::TextWrapped("%s", materializr::tr("Classic: the traditional docked panels and menu bar. Modern: a top app bar, tool rail and side panel. im-touch: a near-zero-chrome full-screen viewport with floating controls only. Switches immediately; each layout keeps its own arrangement."));
 
                     ImGui::Spacing();
-                    if (ImGui::Button(materializr::tr("Reset tool order"))) {
-                        m_railOrder.reset();
-                        changed = true;
-                    }
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("%s", materializr::tr("Put the Modern and im-touch tool rails back in their default order. To rearrange a rail, press and hold a tool for a moment, then drag it to a new place."));
-                    ImGui::SameLine();
                     if (ImGui::Button(materializr::tr("Reset panel layout"))) resetLayout();
                     if (ImGui::IsItemHovered())
                         ImGui::SetTooltip("%s", materializr::tr("Restore the default panel arrangement - use this if a panel gets dragged off-screen or docking gets messy. Also re-applies the interface scale to the panel widths."));
@@ -290,11 +277,11 @@ void Application::renderSettings() {
                     // the same scale, so they stay in proportion. Baked at
                     // startup like Touch mode, hence the restart note.
                     ImGui::SeparatorText(materializr::tr("Interface scale"));
-                    ImGui::BeginDisabled(m_cliUiScale > 0.0f);
+                    ImGui::BeginDisabled(materializr::touchMode() || m_cliUiScale > 0.0f);
                     {
                         int pct = static_cast<int>(m_uiScaleUser * 100.0f + 0.5f);
                         ImGui::SetNextItemWidth(materializr::uiSz(200, 0).x);
-                        if (ImGui::SliderInt("##uiScaleUser", &pct, 50, 250, "%d%%",
+                        if (ImGui::SliderInt("##uiScaleUser", &pct, 75, 250, "%d%%",
                                              ImGuiSliderFlags_AlwaysClamp)) {
                             m_uiScaleUser = static_cast<float>(pct) / 100.0f;
                         }
@@ -307,8 +294,10 @@ void Application::renderSettings() {
                         }
                     }
                     ImGui::EndDisabled();
-                    ImGui::TextWrapped("%s", materializr::tr("Makes the whole interface larger or smaller: text, buttons, spacing and panels together. 100% is the size picked for your display (in Touch mode, the finger-sized default). Takes effect on restart."));
-                    if (m_cliUiScale > 0.0f) {
+                    ImGui::TextWrapped("%s", materializr::tr("Makes the whole interface larger or smaller: text, buttons, spacing and panels together. 100% is the size picked for your display. Takes effect on restart."));
+                    if (materializr::touchMode()) {
+                        ImGui::TextDisabled("%s", materializr::tr("Touch mode sets its own size, so this is off while Touch mode is on."));
+                    } else if (m_cliUiScale > 0.0f) {
                         ImGui::TextDisabled("%s", materializr::tr("This launch was started with --ui-scale, which takes priority."));
                     } else if (std::abs(m_uiScaleUser - m_uiScaleApplied) > 1e-4f) {
                         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "%s", materializr::tr("Restart Materializr to apply the new size, then use Reset panel layout if the panels look cramped."));
@@ -434,10 +423,6 @@ void Application::renderSettings() {
                 // constraints are always on the right-click "Add Constraint"
                 // menu. This tab keeps the toolbar-tooltip toggle.
                 if (ImGui::BeginTabItem(materializr::tr("Sketch###Sketch"))) {
-                    ImGui::SeparatorText(materializr::tr("Deleting sketches"));
-                    if (ImGui::Checkbox(materializr::tr("Deleting a sketch also deletes the bodies built from it"), &m_deleteSketchRemovesBodies)) changed = true;
-                    ImGui::TextWrapped("%s", materializr::tr("Off (default): the bodies stay, as plain solids, when you delete the sketch they were extruded or lathed from. On: the bodies that sketch created are deleted with it (bodies it only cut into are kept). Each is its own undo step."));
-                    ImGui::Spacing();
                     ImGui::SeparatorText(materializr::tr("Drawing inferences"));
                     ImGui::TextWrapped("%s", materializr::tr("As you draw, coloured ghost guides show alignment (perpendicular, parallel, on-axis, on-midpoint, etc.) and the cursor snaps. Full adds hover-to-charge references (dwell on a point / midpoint / face vertex to align from it). Reduced is the classic guides only, no hover-charging. Off is grid + endpoint only. Constraints live on the sketch right-click \"Add Constraint\" menu."));
 
@@ -968,11 +953,8 @@ void Application::renderMirrorPopup() {
         auto mirrorAxis = [&](int axis) {
             try {
                 auto trackBodies = trackBodyChanges(); // re-tessellate only what changes
-                // One plane for the whole selection (the union box), so a group
-                // mirrors as a group and keeps its internal layout.
-                Bnd_Box bb;
-                for (int mid : m_mirrorBodyIds)
-                    BRepBndLib::Add(m_document->getBody(mid), bb);
+                const TopoDS_Shape& shape = m_document->getBody(m_mirrorBodyId);
+                Bnd_Box bb; BRepBndLib::Add(shape, bb);
                 if (bb.IsVoid()) return;
                 double x1, y1, z1, x2, y2, z2; bb.Get(x1, y1, z1, x2, y2, z2);
                 double cx = (x1 + x2) * 0.5, cy = (y1 + y2) * 0.5, cz = (z1 + z2) * 0.5;
@@ -980,38 +962,18 @@ void Application::renderMirrorPopup() {
                 if (axis == 0)      { pt = gp_Pnt(x1, cy, cz); dir = gp_Dir(1, 0, 0); }
                 else if (axis == 1) { pt = gp_Pnt(cx, y1, cz); dir = gp_Dir(0, 1, 0); }
                 else                { pt = gp_Pnt(cx, cy, z1); dir = gp_Dir(0, 0, 1); }
-                for (int mid : m_mirrorBodyIds) {
-                    auto op = std::make_unique<MirrorOp>();
-                    op->setBody(mid);
-                    op->setPlane(MirrorPlane::Custom);
-                    op->setCustomPlane(gp_Ax2(pt, dir));
-                    op->setKeepOriginal(true);
-                    m_history->pushOperation(std::move(op), *m_document);
-                }
+                auto op = std::make_unique<MirrorOp>();
+                op->setBody(m_mirrorBodyId);
+                op->setPlane(MirrorPlane::Custom);
+                op->setCustomPlane(gp_Ax2(pt, dir));
+                op->setKeepOriginal(true);
+                m_history->pushOperation(std::move(op), *m_document);
             } catch (...) {}
         };
 
         if (ImGui::Button(materializr::tr("X axis"), materializr::uiSz(150, 0))) { mirrorAxis(0); ImGui::CloseCurrentPopup(); }
         if (ImGui::Button(materializr::tr("Y axis"), materializr::uiSz(150, 0))) { mirrorAxis(1); ImGui::CloseCurrentPopup(); }
         if (ImGui::Button(materializr::tr("Z axis"), materializr::uiSz(150, 0))) { mirrorAxis(2); ImGui::CloseCurrentPopup(); }
-        ImGui::Separator();
-        // About the world origin, not the body's own edge: the copy lands where a
-        // part and its twin sit either side of the origin (#153). Named in the
-        // user's Z-up axes, like the AI mirror tool: world Y is "up" here.
-        ImGui::TextDisabled("%s", materializr::tr("Through the origin"));
-        auto mirrorOrigin = [&](MirrorPlane plane) {
-            auto trackBodies = trackBodyChanges(); // re-tessellate only what changes
-            for (int mid : m_mirrorBodyIds) {
-                auto op = std::make_unique<MirrorOp>();
-                op->setBody(mid);
-                op->setPlane(plane);
-                op->setKeepOriginal(true);
-                m_history->pushOperation(std::move(op), *m_document);
-            }
-        };
-        if (ImGui::Button(materializr::tr("X = 0 plane"), materializr::uiSz(150, 0))) { mirrorOrigin(MirrorPlane::YZ); ImGui::CloseCurrentPopup(); }
-        if (ImGui::Button(materializr::tr("Y = 0 plane"), materializr::uiSz(150, 0))) { mirrorOrigin(MirrorPlane::XY); ImGui::CloseCurrentPopup(); }
-        if (ImGui::Button(materializr::tr("Z = 0 plane"), materializr::uiSz(150, 0))) { mirrorOrigin(MirrorPlane::XZ); ImGui::CloseCurrentPopup(); }
         ImGui::Separator();
         if (ImGui::Button(materializr::tr("Across a face…"), materializr::uiSz(150, 0))) {
             m_mirrorPickFace = true; // next planar face click defines the mirror plane
@@ -1118,10 +1080,6 @@ void Application::renderRotatePanel() {
     const bool isPlane = m_selection->primaryType() == SelectionType::Plane;
     if (!m_selection->hasSelectedBodies() && !m_selection->hasSelectedSketches() &&
         !m_selection->hasSelectedSketchRegions() && !isPlane) {
-        endSession();
-        return;
-    }
-    if (isPlane && !m_planeGizmoArmed && !m_planeOpActive) {   // see renderMovePanel
         endSession();
         return;
     }
@@ -1233,12 +1191,8 @@ void Application::renderMovePanel() {
         m_movePending = false;
     };
     const bool isPlane = m_selection && m_selection->primaryType() == SelectionType::Plane;
-    // A plane's gizmo exists only once Move is chosen (m_planeGizmoArmed), and the
-    // typed Apply is carried out THROUGH that gizmo. Showing the panel for a merely
-    // selected plane gave a field whose Apply did nothing and then stayed disabled.
     if (m_inSketchMode || !m_gizmo || m_gizmo->getMode() != GizmoMode::Translate ||
         m_selection->navigationOnly() ||
-        (isPlane && !m_planeGizmoArmed && !m_planeOpActive) ||
         !(m_selection->hasSelectedBodies() || isPlane)) {
         endSession();
         return;
@@ -2277,57 +2231,6 @@ void Application::renderThreadPanel() {
     ImGui::End();
 }
 
-void Application::renderSweepPanel() {
-    if (!m_sweepActive) return;
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - 300,
-                                    ImGui::GetWindowPos().y + 50),
-                            ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(uiSz(300, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Sweep", nullptr,
-        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
-        ImGuiWindowFlags_AlwaysAutoResize);
-
-    auto sketchLabel = [&](int id) {
-        std::string label = "Sketch " + std::to_string(id);
-        if (m_document)
-            if (auto sk = m_document->getSketch(id)) {
-                label = sk->getName();
-                if (label == "Sketch") label += " " + std::to_string(id);
-            }
-        return label;
-    };
-    bool changed = false;
-    ImGui::TextColored(materializr::accentText(), "%s", materializr::tr("Sweep"));
-    ImGui::TextWrapped(materializr::tr("Profile: %s"), sketchLabel(m_sweepProfileSketch).c_str());
-    ImGui::TextWrapped(materializr::tr("Path: %s"), sketchLabel(m_sweepPathSketch).c_str());
-    if (ImGui::Button(materializr::tr("Swap profile and path"))) {
-        std::swap(m_sweepProfileSketch, m_sweepPathSketch);
-        changed = true;
-    }
-    ImGui::SetItemTooltip("%s", materializr::tr("Use the other sketch as the profile."));
-    ImGui::Separator();
-    if (ImGui::Checkbox(materializr::tr("Keep the profile square to the path"), &m_sweepPerpendicular))
-        changed = true;
-    ImGui::SetItemTooltip("%s", materializr::tr("On: the profile is turned square to the path so the tube keeps the size you drew. Off: it is swept at whatever angle it was drawn."));
-    ImGui::TextDisabled("%s", materializr::tr("The profile is carried to the nearest end of the path."));
-    if (!m_sweepFailure.empty()) {
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "%s", materializr::tr(m_sweepFailure.c_str()));
-    }
-    ImGui::Separator();
-    const bool canApply = m_sweepPreview.applied();
-    ImGui::BeginDisabled(!canApply);
-    bool applyClicked = ImGui::Button(materializr::tr("Apply"), materializr::uiSz(120, 0));
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    bool cancelClicked = ImGui::Button(materializr::tr("Cancel"), materializr::uiSz(120, 0));
-    const bool escPressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
-    if (changed) updateSweep();
-    if (applyClicked && canApply) commitSweep();
-    else if (cancelClicked || escPressed) cancelSweep();
-    ImGui::End();
-}
-
 void Application::renderLoftPanel() {
     if (!m_loftActive) return;
 
@@ -2367,7 +2270,6 @@ void Application::renderLoftPanel() {
             ImGui::TextWrapped(materializr::tr("Rail %zu: %s"), i + 1,
                                sketchLabel(m_loftRails[i].sketchId).c_str());
         ImGui::TextDisabled("%s", materializr::tr("The base profile shrinks/grows to follow the\nrails as it rises; rails meeting a single point\nclose to an apex."));
-        ImGui::TextDisabled("%s", materializr::tr("It stays centred over its base. To make a shape\nfollow a path, use Sweep."));
         ImGui::Separator();
         if (ImGui::Checkbox(materializr::tr("Solid (off = surface shell)"), &m_loftSolid))
             changed = true;
@@ -3564,10 +3466,7 @@ void Application::applySketchMove() {
     auto op = std::make_unique<materializr::SketchTransformOp>();
     op->setSketch(sketchId);
     op->setTransform(trsf);
-    // Sketches drawn on the body this one builds travel with it (#185).
-    materializr::addHostedFollowers(*op, sketchBodyLinks(), *m_history, *m_document, sketchId);
     bool ok = m_history->pushOperation(std::move(op), *m_document);
-    if (ok) cascadeFromSketchEdit(sketchId);   // what was built from it follows
     std::fprintf(stderr, "[SketchMove] apply sketch=%d delta=(%.3f, %.3f, %.3f) -> %s\n",
                  sketchId, m_sketchMove[0], m_sketchMove[1], m_sketchMove[2],
                  ok ? "ok" : "FAILED");
@@ -3761,25 +3660,6 @@ void Application::renderSnapSettingsPopup() {
             }
         }
 
-        // Angle snap for the line tool, duplicated from Settings (Sketch tab) so
-        // it can be flipped without leaving the sketch, like Display unit above.
-        {
-            static const int kDegs[] = { 0, 5, 15, 30, 45, 90 };
-            const char* degLabels[] = { "Off", "5\xc2\xb0", "15\xc2\xb0", "30\xc2\xb0", "45\xc2\xb0", "90\xc2\xb0" };
-            int curDeg = m_sketchTool ? m_sketchTool->getAngleSnapDeg() : 15;
-            int idx = 2; // default 15 deg
-            for (int i = 0; i < 6; ++i) if (kDegs[i] == curDeg) idx = i;
-            ImGui::SetNextItemWidth(materializr::uiSz(150, 0).x);
-            if (ImGui::Combo(materializr::tr("Angle snap"), &idx, degLabels, 6)) {
-                if (m_sketchTool) m_sketchTool->setAngleSnapDeg(kDegs[idx]);
-                saveAppSettings();
-                // Same reason as the unit combo: an open popup holds
-                // m_snapWidgetHovered and freezes sketch input.
-                ImGui::CloseCurrentPopup();
-            }
-            wrapTip(materializr::tr("While drawing a line, snap its direction to multiples of this angle from the start point. Lower = more snap rays (15\xc2\xb0 is the classic CAD default); higher = only the cardinal angles; Off = free angles."));
-        }
-
         ImGui::Spacing();
         ImGui::Text("%s", materializr::trFormat("Step (%s)", materializr::unitSuffix()).c_str());
         // The presets are in the DISPLAY unit, not millimetres. They used to be
@@ -3918,38 +3798,6 @@ void Application::renderConstructionPlanePanel() {
         offsetChanged = true;
     }
     ImGui::TextDisabled("%s", materializr::tr("Pushes the plane along its normal. Negative for the opposite side."));
-    // A vertex is selected: one tap puts the plane through it (the distance
-    // would otherwise have to be typed from the point's coordinates).
-    if (m_planeOpHavePoint && m_planeOpKindIdx <= 3 &&
-        ImGui::Button(materializr::tr("Through selected point"))) {
-        double through = m_planeOpOffset;
-        bool ok = false;
-        if (m_planeOpKindIdx == 3 && m_planeOpHaveFace) {
-            // Distance is measured from the face along its normal.
-            const gp_Dir n = m_planeOpBaseFace.Axis().Direction();
-            const gp_Pnt o = m_planeOpBaseFace.Axis().Location();
-            through = (m_planeOpPoint.X() - o.X()) * n.X() +
-                      (m_planeOpPoint.Y() - o.Y()) * n.Y() +
-                      (m_planeOpPoint.Z() - o.Z()) * n.Z();
-            ok = true;
-        } else if (m_planeOpKindIdx <= 2) {
-            // Distance is from the world origin along the plane's normal.
-            auto ids = m_document->getAllPlaneIds();
-            if (!ids.empty()) {
-                if (const auto* p = m_document->getPlane(ids.back())) {
-                    const gp_Dir n = p->plane.Position().Direction();
-                    through = m_planeOpPoint.X() * n.X() + m_planeOpPoint.Y() * n.Y() +
-                              m_planeOpPoint.Z() * n.Z();
-                    ok = true;
-                }
-            }
-        }
-        if (ok) {
-            m_planeOpOffset = through;
-            materializr::formatLengthDigits(m_planeOpOffsetBuf, sizeof(m_planeOpOffsetBuf), m_planeOpOffset);
-            offsetChanged = true;
-        }
-    }
 
     // Gizmo for the preview plane appears automatically (the popup auto-
     // selects the just-pushed plane). Switch modes with W/E or click the
@@ -4299,29 +4147,12 @@ void Application::renderRevolvePopup() {
         }
     }
 
-    // Apply-enabled validation depends on the chosen What. Whatever is missing
-    // is SAID, in red above the buttons: a dead Apply with no reason (or one
-    // that closed the popup and did nothing) reads as a bug.
-    const char* blocker = nullptr;
-    if (m_revolveWhatIdx == 0) {
-        if (m_revolveBodyIds.empty())
-            blocker = materializr::tr("Select the body (or bodies) to rotate first.");
-    } else if (m_revolveSketchId < 0) {
-        blocker = materializr::tr("Select the sketch to revolve first.");
-    } else if (auto sk = m_document->getSketch(m_revolveSketchId);
-               !sk || sk->buildRegions().empty()) {
-        blocker = materializr::tr("This sketch has no closed contour to revolve - "
-                                  "close its open ends first.");
-        flagOpenEnds(m_revolveSketchId, 0.5);   // refreshed every frame the popup is up
-    } else if (m_revolveModeIdx != 0 && m_revolveBodyId < 0) {
-        blocker = materializr::tr("Select the target body together with the sketch "
-                                  "to use Union, Subtract or Intersect.");
-    }
-    const bool canApply = blocker == nullptr;
+    // Apply-enabled validation depends on the chosen What.
+    const bool canApply = (m_revolveWhatIdx == 0)
+                              ? !m_revolveBodyIds.empty()
+                              : (m_revolveSketchId >= 0);
 
     ImGui::Separator();
-    if (blocker)
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s", blocker);
     ImGui::BeginDisabled(!canApply);
     bool applyClicked  = ImGui::Button(materializr::tr("Apply"), materializr::uiSz(130, 0));
     ImGui::EndDisabled();
@@ -4335,17 +4166,8 @@ void Application::renderRevolvePopup() {
         // op would compute "previous = already-rotated", and undo would
         // bring us back to the live-preview state instead of true origin.
         revolveLiveRestore();
-        if (applyRevolve()) {
-            m_revolveActive = false;
-        } else {
-            // Said, not swallowed - and the popup stays up so the settings
-            // can be fixed instead of re-entered.
-            showToast(m_revolveWhatIdx == 0
-                ? materializr::tr("Nothing could be rotated - bodies placed by a mate are skipped.")
-                : materializr::tr("The Lathe couldn't be built from this profile. "
-                                  "Check that it doesn't cross the axis."), 6.0);
-            revolveLiveBegin();
-        }
+        applyRevolve();
+        m_revolveActive = false;
     } else if (cancelClicked) {
         revolveLiveRestore();
         m_revolveActive = false;
@@ -4650,9 +4472,7 @@ void Application::renderAlignFacePopup() {
             auto op = std::make_unique<SketchTransformOp>();
             op->setSketch(m_alignSketchId);
             op->setTransform(full);
-            materializr::addHostedFollowers(*op, sketchBodyLinks(), *m_history, *m_document, m_alignSketchId);
-            if (m_history->pushOperation(std::move(op), *m_document))
-                cascadeFromSketchEdit(m_alignSketchId);   // what was built from it follows
+            m_history->pushOperation(std::move(op), *m_document);
             markDirty();
         }
         m_alignSketchId = -1;
@@ -4914,8 +4734,8 @@ void Application::revolveLiveRestore() {
     m_revolveLiveActive = false;
 }
 
-bool Application::applyRevolve() {
-    if (!m_history || !m_document) return false;
+void Application::applyRevolve() {
+    if (!m_history || !m_document) return;
     auto trackBodies = trackBodyChanges(); // re-tessellate only what changes
 
     // Resolve the axis once - both flows use the same picker.
@@ -4938,7 +4758,7 @@ bool Application::applyRevolve() {
     if (m_revolveWhatIdx == 0) {
         if (m_revolveBodyIds.empty()) {
             std::fprintf(stderr, "[Revolve] apply skipped: no bodies captured\n");
-            return false;
+            return;
         }
         // Bundle all bodies' rotations into one ReplayOp so the user undoes
         // the entire revolve in a single Ctrl+Z. Snapshot each body before
@@ -5008,23 +4828,37 @@ bool Application::applyRevolve() {
                              axisOrigin.X(), axisOrigin.Y(), axisOrigin.Z(),
                              rotated);
         }
-        return rotated > 0;
+        return;
     }
 
     // Sweep Sketch path - original RevolveOp flow.
-    if (m_revolveSketchId < 0) return false;
+    if (m_revolveSketchId < 0) return;
     auto sk = m_document->getSketch(m_revolveSketchId);
-    if (!sk) return false;
-    // Every solid region of the sketch, not just the biggest: two separate
-    // closed contours lathe together (see RevolveOp::profileFromSketch).
-    const TopoDS_Shape profile = RevolveOp::profileFromSketch(*sk);
-    if (profile.IsNull()) {
+    if (!sk) return;
+    auto regions = sk->buildRegions();
+    // Pick the outermost region (largest outer bbox) - its face carries any
+    // inner boundaries as holes. Matches RevolveOp::rebuildProfileFromSketch
+    // so reloads re-derive the same profile.
+    int bestIdx = -1;
+    double bestDiag = -1.0;
+    for (size_t i = 0; i < regions.size(); ++i) {
+        if (regions[i].face.IsNull() || regions[i].outerWire.IsNull()) continue;
+        Bnd_Box bb;
+        BRepBndLib::Add(regions[i].outerWire, bb);
+        if (bb.IsVoid()) continue;
+        double x0, y0, z0, x1, y1, z1;
+        bb.Get(x0, y0, z0, x1, y1, z1);
+        double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+        double diag = dx * dx + dy * dy + dz * dz;
+        if (diag > bestDiag) { bestDiag = diag; bestIdx = static_cast<int>(i); }
+    }
+    if (bestIdx < 0) {
         std::fprintf(stderr, "[Revolve] sketch has no closed region to revolve\n");
-        return false;
+        return;
     }
 
     auto op = std::make_unique<RevolveOp>();
-    op->setProfile(profile);
+    op->setProfile(regions[bestIdx].face);
     op->setSketchSource(m_revolveSketchId); // for reload profile re-derivation
     op->setAxis(gp_Ax1(axisOrigin, axisDir));
     op->setAngle(static_cast<double>(m_revolveAngle));
@@ -5041,10 +4875,9 @@ bool Application::applyRevolve() {
     if (m_history->pushOperation(std::move(op), *m_document)) {
         std::fprintf(stdout, "[Revolve] sweep-sketch applied: angle=%.1f° mode=%d\n",
                      m_revolveAngle, m_revolveModeIdx);
-        return true;
+    } else {
+        std::fprintf(stderr, "[Revolve] op execute failed\n");
     }
-    std::fprintf(stderr, "[Revolve] op execute failed\n");
-    return false;
 }
 
 void Application::renderConstructionAxisPanel() {
@@ -5282,8 +5115,7 @@ void Application::renderTextToolPanel() {
                                            "Comic (Neue)",
                                            "Stencil (Black Ops)",
                                            "Impact (Anton)",
-                                           "Script (Pacifico)",
-                                           "中文 (Noto Sans SC)"};
+                                           "Script (Pacifico)"};
         static const char* kFontFiles[] = {"JetBrainsMono-Regular.ttf",
                                            "DejaVuSans.ttf",
                                            "DejaVuSerif.ttf",
@@ -5293,8 +5125,7 @@ void Application::renderTextToolPanel() {
                                            "ComicNeue-Regular.ttf",
                                            "BlackOpsOne-Regular.ttf",
                                            "Anton-Regular.ttf",
-                                           "Pacifico-Regular.ttf",
-                                           "NotoSansSC.ttf"};
+                                           "Pacifico-Regular.ttf"};
         static_assert(IM_ARRAYSIZE(kFontNames) == IM_ARRAYSIZE(kFontFiles),
                       "font name/file lists must stay in lockstep");
         static int fontIdx = 0;
@@ -5592,10 +5423,8 @@ void Application::renderSvgToolPanel() {
 void Application::renderMirrorToolPanel() {
     if (!m_inSketchMode || !m_sketchTool ||
         m_sketchTool->getMode() != SketchToolMode::Mirror ||
-        !m_sketchTool->isMirrorActive()) {
-        m_mirrorPickingLine = false;
+        !m_sketchTool->isMirrorActive())
         return;
-    }
 
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(
@@ -5616,16 +5445,6 @@ void Application::renderMirrorToolPanel() {
         ImGui::SameLine();
         if (ImGui::Button(materializr::tr("Horizontal")))
             m_sketchTool->setMirrorAngle(0.0f);
-        // Mirror across a line that is already in the sketch: click this, then
-        // the line. The mirror line takes its position and direction.
-        if (ImGui::Button(m_mirrorPickingLine ? materializr::tr("Click a line in the sketch...")
-                                              : materializr::tr("Along a sketch line")))
-            m_mirrorPickingLine = !m_mirrorPickingLine;
-        // Pin the line to the sketch origin, so a part and its twin sit either
-        // side of the sketch's own axes (#153). Combine with Vertical/Horizontal.
-        ImGui::SameLine();
-        if (ImGui::Button(materializr::tr("Through origin")))
-            m_sketchTool->setMirrorAnchor(glm::vec2(0.0f, 0.0f));
         ImGui::SameLine();
         float degs = m_sketchTool->getMirrorAngle() * 180.0f / static_cast<float>(M_PI);
         // Normalise to [0,180) - a line's direction and its reverse are the same.
@@ -5647,7 +5466,6 @@ void Application::renderMirrorToolPanel() {
             auto trackBodies = trackBodyChanges(); // re-tessellate only what changes
             std::set<int> newPts, newLines;
             recordSketchMutation([&]{ m_sketchTool->commitMirror(newPts, newLines); });
-            m_mirrorPickingLine = false;
             m_sketchTool->cancelMirror();
             m_sketchTool->setMode(SketchToolMode::Select);
             m_sketchTool->setSelection(newPts, newLines);
@@ -5655,367 +5473,15 @@ void Application::renderMirrorToolPanel() {
         }
         ImGui::SameLine();
         if (ImGui::Button(materializr::tr("Cancel"))) {
-            m_mirrorPickingLine = false;
             m_sketchTool->cancelMirror();
             m_sketchTool->setMode(SketchToolMode::Select);
         }
     }
     ImGui::End();
     if (!open) {
-        m_mirrorPickingLine = false;
         m_sketchTool->cancelMirror();
         m_sketchTool->setMode(SketchToolMode::Select);
     }
-}
-
-void Application::renderPolygonToolPanel() {
-    if (!m_inSketchMode || !m_sketchTool ||
-        m_sketchTool->getMode() != SketchToolMode::Polygon)
-        return;
-
-    // A click / Place with a typed size of 0 does nothing; say why.
-    if (const char* why = m_sketchTool->consumeShapeRejection())
-        showToast(materializr::tr(why), 3.0);
-
-    ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(
-        ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 60.0f),
-        ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.92f);
-    bool open = true;
-    auto& spec = m_sketchTool->polygonSpec();
-    if (ImGui::Begin("Polygon", &open,
-                     ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetFontSize() * 22.0f);
-        ImGui::TextDisabled("%s", m_sketchTool->isPlacing()
-            ? materializr::tr("Drag to size it, or type an exact size and angle below, then click or press Place.")
-            : materializr::tr("Click the centre. Choose how the size is measured below."));
-        ImGui::PopTextWrapPos();
-
-        int sides = m_sketchTool->getPolygonSides();
-        ImGui::SetNextItemWidth(materializr::uiSz(120, 0).x);
-        if (ImGui::InputInt(materializr::tr("Sides"), &sides)) m_sketchTool->setPolygonSides(sides);
-
-        // "##" ids: the size field below carries the same words as its label.
-        int dm = spec.diameter ? 1 : 0;
-        if (ImGui::RadioButton((std::string(materializr::tr("Radius")) + "##polyMode").c_str(), &dm, 0)) {}
-        ImGui::SameLine();
-        if (ImGui::RadioButton((std::string(materializr::tr("Diameter")) + "##polyMode").c_str(), &dm, 1)) {}
-        spec.diameter = dm == 1;
-        int ins = spec.inscribed ? 1 : 0;
-        if (ImGui::RadioButton(materializr::tr("Circumscribed"), &ins, 0)) {}
-        ImGui::SameLine();
-        if (ImGui::RadioButton(materializr::tr("Inscribed"), &ins, 1)) {}
-        spec.inscribed = ins == 1;
-        ImGui::TextDisabled("%s", spec.inscribed
-            ? materializr::tr("Inscribed: the circle touching the sides (across flats).")
-            : materializr::tr("Circumscribed: the circle through the corners."));
-
-        // The size: what is being dragged until it is typed.
-        float curR = 0.0f, curRot = 0.0f;
-        const bool placing = m_sketchTool->isPlacing();
-        if (placing)
-            m_sketchTool->polygonResolve(m_sketchTool->getFirstClick(),
-                                         m_sketchTool->getCurrentPos(), curR, curRot);
-        double size = spec.hasSize ? spec.size : m_sketchTool->polygonSizeFor(curR);
-        const char* sizeLabel = spec.diameter ? materializr::tr("Diameter") : materializr::tr("Radius");
-        bool edited = false;
-        ImGui::Separator();
-        if (imTouchLayout())
-            edited = materializr::amountLengthField("polySize", sizeLabel, &size);
-        else
-            edited = materializr::lengthField(sizeLabel, &size).changed;
-        // -10 / -1 / -0.1 / +0.1 / +1 / +10, like every other length - in
-        // every layout, im-touch included (its number pad is no substitute).
-        ImGui::PushID("polySizeStep");
-        edited |= materializr::lengthStepperRow("##step", &size, /*allowNegative=*/true,
-                                                0.0, 1.0e6, 0.0, /*showZero=*/true);
-        ImGui::PopID();
-        // The 0 button (and a typed 0) sets 0.00 - a place to start stepping
-        // from - and a negative value is 0. A size of 0 makes no polygon: Place
-        // or a click says so (Follow cursor hands the size back to the mouse).
-        if (edited) { spec.hasSize = true; spec.size = std::max(size, 0.0); }
-
-        // The angle of the first corner, from the sketch's +X axis.
-        double ang = spec.hasAngle ? spec.angleDeg : curRot * 180.0 / M_PI;
-        bool angEdited = false;
-        ImGui::SetNextItemWidth(materializr::uiSz(140, 0).x);
-        angEdited = ImGui::InputDouble(materializr::tr("First corner angle (deg)"), &ang, 0.0, 0.0, "%.2f");
-        {
-            static const double steps[] = {-90, -45, -15, 0, 15, 45, 90};
-            ImGui::PushID("polyAngStep");
-            for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); ++i) {
-                if (i) ImGui::SameLine();
-                char b[16];
-                if (steps[i] == 0) std::snprintf(b, sizeof b, "0");
-                else               std::snprintf(b, sizeof b, "%+g", steps[i]);
-                ImGui::PushID(static_cast<int>(i));
-                if (ImGui::SmallButton(b)) {
-                    ang = steps[i] == 0 ? 0.0 : ang + steps[i];
-                    angEdited = true;
-                }
-                ImGui::PopID();
-            }
-            ImGui::PopID();
-        }
-        if (angEdited) {
-            while (ang >= 360.0) ang -= 360.0;
-            while (ang < 0.0)    ang += 360.0;
-            spec.hasAngle = true;
-            spec.angleDeg = ang;
-        }
-
-        ImGui::Separator();
-        ImGui::BeginDisabled(!placing);
-        if (ImGui::Button(materializr::tr("Place"))) {
-            auto trackBodies = trackBodyChanges(); // re-tessellate only what changes
-            recordSketchMutation([&]{ m_sketchTool->commitPolygonNow(); });
-            markDirty();
-        }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::BeginDisabled(!spec.hasSize && !spec.hasAngle);
-        if (ImGui::Button(materializr::tr("Follow cursor"))) {
-            spec.hasSize = false;
-            spec.hasAngle = false;
-        }
-        ImGui::EndDisabled();
-    }
-    ImGui::End();
-    if (!open) m_sketchTool->setMode(SketchToolMode::Select);
-}
-
-// Line / Circle / Rectangle / Arc: the Polygon panel's idea for the other four
-// drawing tools. Every value the cursor would set can be typed instead - length,
-// angle, width, height, chord, sweep or radius - with the -10 .. +10 steppers
-// beside it; Place puts the shape down now, Follow cursor hands everything back
-// to the mouse. The values live in SketchTool::ShapeSpec, which both the live
-// preview and the commit read, so what is drawn is what is placed.
-void Application::renderShapeToolPanel() {
-    if (!m_inSketchMode || !m_sketchTool) return;
-    const SketchToolMode mode = m_sketchTool->getMode();
-    if (mode != SketchToolMode::Line && mode != SketchToolMode::Circle &&
-        mode != SketchToolMode::Rectangle && mode != SketchToolMode::Arc)
-        return;
-
-    using namespace materializr;
-    // A click / Place with a typed size of 0 does nothing; say why.
-    if (const char* why = m_sketchTool->consumeShapeRejection())
-        showToast(tr(why), 3.0);
-    auto& spec = m_sketchTool->shapeSpec();
-    const SketchTool::ShapeNow now = m_sketchTool->shapeMeasure();
-    const bool placing = m_sketchTool->isPlacing();
-    const int  clicks  = m_sketchTool->getClickCount();
-
-    const char* name = mode == SketchToolMode::Line ? "Line"
-                     : mode == SketchToolMode::Circle ? "Circle"
-                     : mode == SketchToolMode::Rectangle ? "Rectangle" : "Arc";
-    // One window id for all four so it keeps its place when the tool changes.
-    const std::string title = std::string(tr(name)) + "###shapeToolPanel";
-
-    ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(
-        ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 60.0f),
-        ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.92f);
-    bool open = true;
-    if (ImGui::Begin(title.c_str(), &open,
-                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
-        const char* hint = "";
-        switch (mode) {
-            case SketchToolMode::Line:
-                hint = placing ? tr("Type the length and angle below, then click or press Place. A value you leave alone follows the cursor.")
-                               : tr("Click the start of the line.");
-                break;
-            case SketchToolMode::Circle:
-                hint = placing ? tr("Type the size below, then click or press Place. It follows the cursor until you do.")
-                               : tr("Click the centre (or the first end of the diameter).");
-                break;
-            case SketchToolMode::Rectangle:
-                hint = placing ? tr("Type the width, height and angle below, then click or press Place. Angle 0 keeps the sides horizontal and vertical.")
-                               : tr("Click the first corner (or the centre).");
-                break;
-            default:
-                hint = clicks == 0 ? tr("Click the start of the arc.")
-                     : clicks == 1 ? tr("Type the chord, then click the end or press Place - or just click it.")
-                                   : tr("Set the sweep or radius below, then click or press Place. The cursor chooses which way it bows.");
-                break;
-        }
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetFontSize() * 22.0f);
-        ImGui::TextDisabled("%s", hint);
-        ImGui::PopTextWrapPos();
-
-        // A length: field, then the -10 .. +10 row. 0 sets 0.00 (a negative is
-        // 0 too); a 0 size is refused at Place / click. Follow cursor gives the
-        // values back to the mouse. `cur` is what the cursor currently says.
-        auto lengthRow = [&](const char* id, const char* label, bool& has, double& val, double cur) {
-            double v = has ? val : cur;
-            bool edited = false;
-            ImGui::PushID(id);
-            if (imTouchLayout())
-                edited = amountLengthField(id, label, &v);
-            else
-                edited = lengthField(label, &v).changed;
-            edited |= lengthStepperRow("##step", &v, /*allowNegative=*/true,
-                                       0.0, 1.0e6, 0.0, /*showZero=*/true);
-            ImGui::PopID();
-            if (edited) { has = true; val = std::max(v, 0.0); }
-        };
-        // An angle in degrees: field, then -90 .. +90. `wrap` keeps it in 0..360
-        // (a direction); off, the value is clamped by the caller (a sweep).
-        // Zero sets 0 for a direction (horizontal / axis-aligned) but clears a
-        // sweep, where 0 is no arc.
-        auto angleRow = [&](const char* id, const char* label, bool& has, double& val,
-                            double cur, bool direction, double lo, double hi) {
-            double a = has ? val : cur;
-            bool edited = false;
-            ImGui::PushID(id);
-            ImGui::SetNextItemWidth(uiSz(140, 0).x);
-            edited = ImGui::InputDouble(label, &a, 0.0, 0.0, "%.2f");
-            static const double steps[] = { -90, -45, -15, 0, 15, 45, 90 };
-            bool cleared = false;
-            for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); ++i) {
-                if (i) ImGui::SameLine();
-                char b[16];
-                if (steps[i] == 0) std::snprintf(b, sizeof b, "0");
-                else               std::snprintf(b, sizeof b, "%+g", steps[i]);
-                ImGui::PushID(static_cast<int>(i));
-                if (ImGui::SmallButton(b)) {
-                    if (steps[i] == 0) { a = 0.0; if (!direction) cleared = true; }
-                    else a += steps[i];
-                    edited = true;
-                }
-                ImGui::PopID();
-            }
-            ImGui::PopID();
-            if (edited) {
-                if (cleared) { has = false; }
-                else {
-                    if (direction) { while (a >= 360.0) a -= 360.0; while (a < 0.0) a += 360.0; }
-                    else a = std::min(std::max(a, lo), hi);
-                    has = true; val = a;
-                }
-            }
-        };
-        auto placeRow = [&](bool placeEnabled) {
-            ImGui::Separator();
-            ImGui::BeginDisabled(!placeEnabled);
-            if (ImGui::Button(tr("Place"))) {
-                auto trackBodies = trackBodyChanges(); // re-tessellate only what changes
-                recordSketchMutation([&]{ m_sketchTool->commitShapeNow(); });
-                markDirty();
-            }
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-            ImGui::BeginDisabled(!spec.any());
-            if (ImGui::Button(tr("Follow cursor"))) m_sketchTool->clearShapeSpec();
-            ImGui::EndDisabled();
-        };
-
-        ImGui::Separator();
-        switch (mode) {
-            case SketchToolMode::Line: {
-                lengthRow("lineLen", tr("Length"), spec.hasLen, spec.len, now.len);
-                angleRow("lineAng", tr("Angle (deg)"), spec.hasAngle, spec.angleDeg, now.angleDeg,
-                         /*direction=*/true, 0.0, 360.0);
-                placeRow(placing);
-                break;
-            }
-            case SketchToolMode::Circle: {
-                int dm = m_sketchTool->circleDiameter() ? 1 : 0;
-                const int was = dm;
-                if (ImGui::RadioButton((std::string(tr("Radius")) + "##circMode").c_str(), &dm, 0)) {}
-                ImGui::SameLine();
-                if (ImGui::RadioButton((std::string(tr("Diameter")) + "##circMode").c_str(), &dm, 1)) {}
-                if (dm != was) {
-                    // Keep the same circle: the typed number changes meaning.
-                    if (spec.hasLen) spec.len *= (dm == 1) ? 2.0 : 0.5;
-                    m_sketchTool->setCircleDiameter(dm == 1);
-                }
-                lengthRow("circSize", dm == 1 ? tr("Diameter") : tr("Radius"),
-                          spec.hasLen, spec.len, now.len);
-                placeRow(placing);
-                break;
-            }
-            case SketchToolMode::Rectangle: {
-                lengthRow("rectW", tr("Width"),  spec.hasW, spec.w, now.w);
-                lengthRow("rectH", tr("Height"), spec.hasH, spec.h, now.h);
-                angleRow("rectAng", tr("Angle (deg)"), spec.hasAngle, spec.angleDeg, now.angleDeg,
-                         /*direction=*/true, 0.0, 360.0);
-                placeRow(placing);
-                break;
-            }
-            default: {   // Arc
-                lengthRow("arcChord", tr("Chord"), spec.hasLen, spec.len, now.len);
-                ImGui::Separator();
-                int rm = m_sketchTool->getArcDimMode() == SketchTool::ArcDimMode::Radius ? 1 : 0;
-                const int was = rm;
-                if (ImGui::RadioButton((std::string(tr("Degrees")) + "##arcMode").c_str(), &rm, 0)) {}
-                ImGui::SameLine();
-                if (ImGui::RadioButton((std::string(tr("Radius")) + "##arcMode").c_str(), &rm, 1)) {}
-                if (rm != was) {
-                    // Degrees and millimetres do not convert: start over.
-                    spec.hasApex = false;
-                    m_sketchTool->setArcDimMode(rm == 1 ? SketchTool::ArcDimMode::Radius
-                                                        : SketchTool::ArcDimMode::Sweep);
-                }
-                if (rm == 1) {
-                    lengthRow("arcRadius", tr("Radius"), spec.hasApex, spec.apex, now.apex);
-                    if (clicks == 2)
-                        ImGui::TextDisabled("%s", trFormat("min %s (half the chord)", fmtLength(m_sketchTool->arcMinRadius())).c_str());
-                } else {
-                    angleRow("arcSweep", tr("Degrees"), spec.hasApex, spec.apex, now.apex,
-                             /*direction=*/false, 0.1, 359.9);
-                }
-                placeRow(placing);
-                break;
-            }
-        }
-    }
-    ImGui::End();
-    if (!open) m_sketchTool->setMode(SketchToolMode::Select);
-}
-
-void Application::renderCornerToolPanel() {
-    if (!m_inSketchMode || !m_sketchTool ||
-        m_sketchTool->getMode() != SketchToolMode::Corner)
-        return;
-    // A click that could not be applied (the size does not fit) says why.
-    if (const char* why = m_sketchTool->consumeCornerRejection())
-        showToast(materializr::tr(why), 3.0);
-
-    ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(
-        ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + 60.0f),
-        ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
-    ImGui::SetNextWindowBgAlpha(0.92f);
-    bool open = true;
-    if (ImGui::Begin("Corner", &open,
-                     ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetFontSize() * 22.0f);
-        ImGui::TextDisabled("%s", materializr::tr("Click a corner where two lines meet. Set the size first; it stays for the next corner."));
-        ImGui::PopTextWrapPos();
-        int kind = m_sketchTool->cornerChamfer() ? 1 : 0;
-        if (ImGui::RadioButton(materializr::tr("Fillet"), &kind, 0)) {}
-        ImGui::SameLine();
-        if (ImGui::RadioButton(materializr::tr("Chamfer"), &kind, 1)) {}
-        m_sketchTool->setCornerChamfer(kind == 1);
-
-        double size = m_sketchTool->cornerSize();
-        const char* label = kind == 1 ? materializr::tr("Distance") : materializr::tr("Radius");
-        if (imTouchLayout())
-            materializr::amountLengthField("cornerSize", label, &size);
-        else
-            materializr::lengthField(label, &size);
-        materializr::lengthStepperRow("##cornerStep", &size, /*allowNegative=*/true,
-                                      0.0, 1.0e6, 0.0, /*showZero=*/false);
-        if (size < 0.001) size = 0.001;
-        m_sketchTool->setCornerSize(size);
-    }
-    ImGui::End();
-    if (!open) m_sketchTool->setMode(SketchToolMode::Select);
 }
 
 void Application::renderOffsetToolPanel() {
@@ -6067,29 +5533,13 @@ void Application::renderOffsetToolPanel() {
         // longer second hint grew the window off the right edge.
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetFontSize() * 22.0f);
         if (!picked) {
-            if (const int n = m_sketchTool->offsetSelectionCount(); n > 0) {
-                ImGui::TextDisabled("%s", materializr::tr(
-                    "Offsetting only what you had selected. Hover one of those "
-                    "and click to choose it."));
-                if (ImGui::SmallButton(materializr::tr("Use the whole connected contour")))
-                    m_sketchTool->clearOffsetSelection();
-            } else {
-                ImGui::TextDisabled("%s", materializr::tr(
-                    "Hover a line, arc or circle - the whole connected chain "
-                    "highlights. Click to choose it."));
-                ImGui::TextDisabled("%s", materializr::tr(
-                    "To offset just some segments, select them first, then choose Offset."));
-            }
-        } else {
-            // Touch: a tap FIXES the distance and the Offset button places it;
-            // a mouse click places it directly.
-            m_sketchTool->setOffsetTapLocks(materializr::touchMode());
             ImGui::TextDisabled("%s", materializr::tr(
-                materializr::touchMode()
-                    ? "Move the stylus to set the distance, then tap to fix it, or type "
-                      "a value. Press Offset to place it."
-                    : "Move the cursor to set the distance; the side it is on picks "
-                      "the direction. Click or press Enter to place it."));
+                "Hover a line, arc or circle - the whole connected chain "
+                "highlights. Click to choose it."));
+        } else {
+            ImGui::TextDisabled("%s", materializr::tr(
+                "Move the cursor to set the distance; the side it is on picks "
+                "the direction. Click or press Enter to place it."));
 
             // Edited as a magnitude - the sign is a direction, and Flip owns it.
             float mag = std::abs(m_sketchTool->getOffsetDistance());
@@ -6099,11 +5549,7 @@ void Application::renderOffsetToolPanel() {
                 if (mag < 0.0f) mag = 0.0f;
                 m_sketchTool->setOffsetDistance(
                     m_sketchTool->getOffsetDistance() < 0.0f ? -mag : mag);
-                m_sketchTool->lockOffsetDistance();
             }
-            // Focusing the field freezes the distance where it is, so the preview
-            // stops chasing the pointer while the value is being typed.
-            if (ImGui::IsItemActive()) m_sketchTool->lockOffsetDistance();
             ImGui::SameLine();
             if (ImGui::Button(materializr::tr("Flip"))) m_sketchTool->flipOffsetSide();
             ImGui::SetItemTooltip("%s", materializr::tr(
@@ -6132,13 +5578,6 @@ void Application::renderOffsetToolPanel() {
         ImGui::BeginDisabled(!m_sketchTool->offsetReady());
         if (ImGui::Button(materializr::tr("Offset"))) commitOffsetNow();
         ImGui::EndDisabled();
-        if (picked) {
-            ImGui::SameLine();
-            ImGui::BeginDisabled(!m_sketchTool->offsetDistanceLocked());
-            if (ImGui::Button(materializr::tr("Follow cursor")))
-                m_sketchTool->unlockOffsetDistance();
-            ImGui::EndDisabled();
-        }
         ImGui::SameLine();
         if (ImGui::Button(materializr::tr("Cancel"))) {
             if (picked) m_sketchTool->cancelOffset();
@@ -6176,37 +5615,12 @@ void Application::renderPrimitivePopup() {
     ImGui::TextColored(materializr::accentText(), "%s", materializr::tr("Dimensions"));
     // im-touch: number-pad amount fields (the native keyboard froze iOS);
     // other layouts keep the typed InputDouble spinners.
-    // Desktop: a -10 / -1 / -0.1 / +0.1 / +1 / +10 row under each field, like
-    // the other tools - the field's own -/+ only step one unit at a time.
-    // Sizes get no 0 button (zero is not a useful size); origins keep it.
-    auto dimField = [&](const char* label, double* v, bool isOrigin = false) {
+    auto dimField = [&](const char* label, double* v) {
         if (imTouchLayout())
             materializr::amountLengthField(label, label, v);
         else
             materializr::lengthField(label, v);
-        ImGui::PushID(label);
-        materializr::lengthStepperRow("##step", v, /*allowNegative=*/true,
-                                      isOrigin ? -1.0e6 : 0.0, 1.0e6,
-                                      0.0, /*showZero=*/isOrigin);
-        ImGui::PopID();
     };
-    // Radius or diameter: the part is often specified as a diameter (a bore, a
-    // bolt), so the radius fields can be typed as one. The value is kept as a
-    // radius underneath, whichever way it is entered.
-    auto radiusField = [&](const char* radiusLabel, const char* diameterLabel, double* r) {
-        if (!m_primitiveUseDiameter) { dimField(radiusLabel, r); return; }
-        double d = *r * 2.0;
-        dimField(diameterLabel, &d);
-        *r = d * 0.5;
-    };
-    if (k >= 1) {
-        int dm = m_primitiveUseDiameter ? 1 : 0;
-        // "##" ids: the field below carries the same words as its label.
-        if (ImGui::RadioButton((std::string(materializr::tr("Radius")) + "##primMode").c_str(), &dm, 0)) {}
-        ImGui::SameLine();
-        if (ImGui::RadioButton((std::string(materializr::tr("Diameter")) + "##primMode").c_str(), &dm, 1)) {}
-        m_primitiveUseDiameter = dm == 1;
-    }
     switch (k) {
     case 0: // Box
         dimField("Width (X)",  &m_primitivePopupExtents[0]);
@@ -6214,29 +5628,29 @@ void Application::renderPrimitivePopup() {
         dimField("Height (Z)", &m_primitivePopupExtents[2]);
         break;
     case 1: // Cylinder
-        radiusField("Radius", "Diameter", &m_primitivePopupRadius);
+        dimField("Radius", &m_primitivePopupRadius);
         dimField("Height", &m_primitivePopupHeight);
         break;
     case 2: // Sphere
-        radiusField("Radius", "Diameter", &m_primitivePopupRadius);
+        dimField("Radius", &m_primitivePopupRadius);
         break;
     case 3: // Cone
-        radiusField("Bottom radius", "Bottom diameter", &m_primitivePopupRadius);
-        radiusField("Top radius",    "Top diameter",    &m_primitivePopupTopRadius);
+        dimField("Bottom radius", &m_primitivePopupRadius);
+        dimField("Top radius",    &m_primitivePopupTopRadius);
         dimField("Height",        &m_primitivePopupHeight);
         break;
     case 4: // Torus
-        radiusField("Major radius", "Major diameter", &m_primitivePopupRadius);
-        radiusField("Minor radius", "Minor diameter", &m_primitivePopupMinorRadius);
+        dimField("Major radius",  &m_primitivePopupRadius);
+        dimField("Minor radius",  &m_primitivePopupMinorRadius);
         ImGui::TextDisabled("%s", materializr::tr("Major must exceed minor - equal radii are a degenerate self-touching torus."));
         break;
     }
 
     ImGui::Spacing();
     ImGui::TextColored(materializr::accentText(), "%s", materializr::trFormat("Origin (%s)", materializr::unitSuffix()).c_str());
-    dimField("X", &m_primitivePopupOrigin[0], /*isOrigin=*/true);
-    dimField("Y", &m_primitivePopupOrigin[1], /*isOrigin=*/true);
-    dimField("Z", &m_primitivePopupOrigin[2], /*isOrigin=*/true);
+    materializr::lengthField("X", &m_primitivePopupOrigin[0]);
+    materializr::lengthField("Y", &m_primitivePopupOrigin[1]);
+    materializr::lengthField("Z", &m_primitivePopupOrigin[2]);
     ImGui::TextDisabled("%s", materializr::tr("Box origin = corner; the rest use it as the axis base / centre."));
 
     // Geometric validity check - must mirror the bounds in PrimitiveOp::
@@ -7825,23 +7239,6 @@ void Application::renderLandingPage() {
     // Thumbnails peeked off-thread since the last frame become textures here,
     // where the GL context lives; tiles fill in as they arrive.
     drainThumbnailPeeks();
-    // The projects open in tabs, so the page can say so and take you back to
-    // one (#184). Every tab is listed, blank "Untitled" ones included, so the row
-    // matches the tab bar; the only one left out is a lone untouched workspace
-    // (the state right after launch), which has nothing to go back to.
-    {
-        std::vector<LandingPage::OpenTab> open;
-        for (size_t i = 0; i < m_sessions.size(); ++i) {
-            if (m_sessions.size() == 1 && sessionIsBlank(i)) continue;
-            LandingPage::OpenTab t;
-            t.index = i;
-            t.name = sessionDisplayLabel(i);
-            t.active = (i == m_activeSession);
-            t.dirty = sessionDirty(i);
-            open.push_back(std::move(t));
-        }
-        m_landingPage->setOpenTabs(std::move(open));
-    }
     // ImTextureID is an integer alias in this imgui config; the logo texture
     // is a plain GL name, so a value cast is exact.
     m_landingPage->setLogoTexture(
@@ -7875,13 +7272,6 @@ void Application::renderLandingPage() {
         if (!activeSessionIsScratch() && !openNewTab()) break;
         loadProject();
         break;
-    case AT::SwitchTab:
-        // Back to a project that is already open: the page just closes over it.
-        m_landingPage->setVisible(false);
-        if (act.tab != m_activeSession && !switchToSession(act.tab))
-            m_landingPage->setVisible(true);   // refused: stay where we are
-        m_tabSelectionSync = true;             // classic tab bar re-asserts the selection
-        break;
     case AT::ExportStep:
         exportRecentProjectAs(act.ref, act.name, /*asStl=*/false);
         break;   // page stays up - export is a side errand, not a departure
@@ -7893,11 +7283,6 @@ void Application::renderLandingPage() {
         // hides itself (see renderPartsPickerDialog).
         openPartsPicker(act.ref, act.name, /*intoNewProject=*/true);
         break;
-    case AT::DeleteEntry:
-        m_landingDeleteRef = act.ref;
-        m_landingDeleteName = act.name;
-        m_landingDeleteAsk = true;   // the popup below asks before anything goes
-        break;
     case AT::OpenSettings:
         // Same staging as the File menu item: the dialog can Cancel cleanly.
         m_settingsOrbitButton = m_orbitButton;
@@ -7908,81 +7293,11 @@ void Application::renderLandingPage() {
     case AT::OpenHelp:
         if (m_helpPanel) m_helpPanel->setVisible(true);
         break;   // page stays up beneath the help window
-    case AT::Exit:
-        // Same path as File > Exit: the main loop's requestClose() still runs
-        // the unsaved-changes prompt for any tab with work in it.
-        m_window->requestClose(true);
-        break;
     case AT::Dismiss:
         m_landingPage->setVisible(false);
         break;
     case AT::None:
         break;
-    }
-
-    // Delete-project confirmation. A filesystem project is removed from disk
-    // (no recycle bin, so it asks); a content:// document (Android's file
-    // picker) cannot be deleted through the paths this app has, so for those
-    // the tile just comes off the recent list and the file stays put.
-    if (m_landingDeleteAsk) {
-        ImGui::OpenPopup("##LandingDelete");
-        m_landingDeleteAsk = false;
-    }
-    if (ImGui::BeginPopupModal("##LandingDelete", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize |
-                               ImGuiWindowFlags_NoTitleBar)) {
-        const bool isUri = m_landingDeleteRef.rfind("content:", 0) == 0;
-        const bool openElsewhere =
-            !isUri && sessionForProjectRef(m_landingDeleteRef) < m_sessions.size();
-        ImGui::TextColored(materializr::accentText(), "%s",
-                           isUri ? materializr::tr("Remove from the home screen?")
-                                 : materializr::tr("Delete this project?"));
-        ImGui::Separator();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 26.0f);
-        ImGui::TextUnformatted(m_landingDeleteName.c_str());
-        ImGui::TextDisabled("%s", isUri ? "" : m_landingDeleteRef.c_str());
-        ImGui::Spacing();
-        if (openElsewhere)
-            ImGui::TextUnformatted(materializr::tr(
-                "This project is open in a tab. Close that tab first."));
-        else if (isUri)
-            ImGui::TextUnformatted(materializr::tr(
-                "This project lives in a document provider, so the file itself is "
-                "left where it is. Only its tile is removed."));
-        else
-            ImGui::TextUnformatted(materializr::tr(
-                "The project file will be deleted from this device. This cannot be undone."));
-        ImGui::PopTextWrapPos();
-        ImGui::Spacing();
-        const float bw = materializr::uiSz(120, 0).x;
-        const float bh = materializr::touchMode() ? 44.0f * uiScale() : 0.0f;
-        ImGui::BeginDisabled(openElsewhere);
-        if (ImGui::Button(isUri ? materializr::tr("Remove") : materializr::tr("Delete"),
-                          ImVec2(bw, bh))) {
-            bool ok = true;
-            if (!isUri) {
-                std::error_code ec;
-                std::filesystem::remove(m_landingDeleteRef, ec);
-                ok = !ec;
-                if (ok) {
-                    const std::string thumb = thumbCacheFile(m_landingDeleteRef);
-                    if (!thumb.empty()) std::filesystem::remove(thumb, ec);
-                } else {
-                    showToast(materializr::trFormat("Could not delete %s.",
-                                                    m_landingDeleteName.c_str()));
-                }
-            }
-            if (ok) {
-                removeRecentProject(m_landingDeleteRef);
-                m_landingPage->removeEntry(m_landingDeleteRef);
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        if (ImGui::Button(materializr::tr("Cancel"), ImVec2(bw, bh)))
-            ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
     }
 }
 

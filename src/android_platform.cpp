@@ -1,5 +1,4 @@
 #include "android_platform.h"
-#include "core/LogCapture.h"
 
 #if defined(__ANDROID__)
 
@@ -32,7 +31,6 @@ void* logPump(void*) {
     char buf[1024];
     ssize_t n;
     while ((n = read(g_logPipe[0], buf, sizeof(buf) - 1)) > 0) {
-        materializr::logcapture::append(buf, static_cast<size_t>(n));   // Report a Bug > Log
         if (buf[n - 1] == '\n') --n;
         buf[n] = '\0';
         __android_log_write(ANDROID_LOG_INFO, "Materializr-io", buf);
@@ -94,8 +92,7 @@ void androidInitRuntime() {
         "LiberationSerif-Regular.ttf", "LiberationSans-Regular.ttf",
         "Ubuntu-Regular.ttf", "ComicNeue-Regular.ttf",
         "BlackOpsOne-Regular.ttf", "Anton-Regular.ttf", "Pacifico-Regular.ttf",
-        "Iconoir.ttf", // UI icon glyphs (im-touch shell), not a Text-tool font
-        "NotoSansSC.ttf" // CJK glyphs: Chinese UI + Chinese text engraving
+        "Iconoir.ttf" // UI icon glyphs (im-touch shell), not a Text-tool font
     };
     for (const char* f : fonts) {
         extractAsset(std::string("fonts/") + f, internal + "/assets/fonts/" + f);

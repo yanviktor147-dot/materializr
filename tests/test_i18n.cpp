@@ -44,6 +44,7 @@ std::vector<Catalogue> allCatalogues() {
         { "Portuguese", materializr::kPtCatalogue, materializr::kPtCount, Lang::Portuguese },
         { "French",     materializr::kFrCatalogue, materializr::kFrCount, Lang::French     },
         { "German",     materializr::kDeCatalogue, materializr::kDeCount, Lang::German     },
+        { "Russian",    materializr::kRuCatalogue, materializr::kRuCount, Lang::Russian   },
         { "Italian",    materializr::kItCatalogue, materializr::kItCount, Lang::Italian    },
     };
 }
@@ -67,6 +68,7 @@ unsigned decodeUtf8(const char* s, int& len) {
 // JetBrains Mono covers them.
 bool alwaysAvailable(unsigned cp) {
     if (cp <= 0x017F) return true;   // Latin-1 + Latin Extended-A
+    if (0x0400 <= cp && cp <= 0x04FF) return true;  // Cyrillic (Russian UI)
     // Typographic characters the ENGLISH UI already uses somewhere, so the
     // font provably renders them; a translation may use them freely even where
     // its own key does not (pt likes an em dash where en used a hyphen).

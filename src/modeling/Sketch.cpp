@@ -38,7 +38,6 @@
 #include <TopExp_Explorer.hxx>
 
 #include <algorithm>
-#include <functional>
 #include <cstdio>
 #include <cstring>
 #include <limits>
@@ -456,101 +455,6 @@ void Sketch::setRectangleSize(int lineId, double width, double height) {
     }
 }
 
-Sketch::ElementIds Sketch::allElementIds() const {
-    ElementIds ids;
-    for (const auto& p : m_points)  ids.points.insert(p.id);
-    for (const auto& l : m_lines)   ids.lines.insert(l.id);
-    for (const auto& c : m_circles) ids.circles.insert(c.id);
-    for (const auto& a : m_arcs)    ids.arcs.insert(a.id);
-    for (const auto& s : m_splines) ids.splines.insert(s.id);
-    return ids;
-}
-
-Sketch::ElementIds Sketch::copyElements(const ElementIds& src, glm::vec2 offset) {
-    ElementIds made;
-    std::map<int, int> remap;
-    auto copyPt = [&](int oldId) -> int {
-        auto it = remap.find(oldId);
-        if (it != remap.end()) return it->second;
-        const SketchPoint* p = getPoint(oldId);
-        if (!p) return -1;
-        const int nid = addPoint(p->pos + offset);   // may reallocate m_points: p is dead after
-        remap[oldId] = nid;
-        made.points.insert(nid);
-        return nid;
-    };
-    // Snapshot the element lists: adding to the sketch can reallocate them.
-    const auto lines = m_lines;
-    const auto circles = m_circles;
-    const auto arcs = m_arcs;
-    const auto splines = m_splines;
-    for (int id : src.points) copyPt(id);
-    for (const auto& l : lines) {
-        if (!src.lines.count(l.id)) continue;
-        const int s = copyPt(l.startPointId), e = copyPt(l.endPointId);
-        if (s < 0 || e < 0 || s == e) continue;
-        const int nl = addLine(s, e);
-        setElementOrigin(nl, l.id);
-        if (l.isConstruction) setElementConstruction(nl, true);
-        made.lines.insert(nl);
-    }
-    for (const auto& c : circles) {
-        if (!src.circles.count(c.id)) continue;
-        const int ctr = copyPt(c.centerPointId);
-        if (ctr < 0) continue;
-        const int nc = addCircle(ctr, c.radius);
-        setElementOrigin(nc, c.id);
-        if (c.isConstruction) setElementConstruction(nc, true);
-        made.circles.insert(nc);
-    }
-    for (const auto& a : arcs) {
-        if (!src.arcs.count(a.id)) continue;
-        const int ctr = copyPt(a.centerPointId);
-        const int s = copyPt(a.startPointId), e = copyPt(a.endPointId);
-        if (ctr < 0 || s < 0 || e < 0) continue;
-        const int na = addArc(ctr, s, e, a.radius);
-        setElementOrigin(na, a.id);
-        if (a.isConstruction) setElementConstruction(na, true);
-        made.arcs.insert(na);
-    }
-    for (const auto& sp : splines) {
-        if (!src.splines.count(sp.id)) continue;
-        std::vector<int> cps;
-        for (int cp : sp.controlPointIds) {
-            const int n = copyPt(cp);
-            if (n >= 0) cps.push_back(n);
-        }
-        if (cps.size() < 2) continue;
-        const int ns = addSpline(cps);
-        setElementOrigin(ns, sp.id);
-        if (sp.isConstruction) setElementConstruction(ns, true);
-        made.splines.insert(ns);
-    }
-    // A polygon whose edges were all copied is copied AS a polygon, so the copy still
-    // edits by sides / size instead of turning into plain lines.
-    for (int pid : copyPolygonRecords(polygonsMadeOf(src.lines),
-                                      [&](int id) { return copyPt(id); }))
-        made.polygons.insert(pid);
-    return made;
-}
-
-float Sketch::distanceToArc(const SketchArc& arc, glm::vec2 p) const {
-    const SketchPoint* c = getPoint(arc.centerPointId);
-    const SketchPoint* s = getPoint(arc.startPointId);
-    const SketchPoint* e = getPoint(arc.endPointId);
-    if (!c || !s || !e) return std::numeric_limits<float>::infinity();
-    const float twoPi = 2.0f * static_cast<float>(M_PI);
-    auto wrap = [&](float a) { while (a < 0.0f) a += twoPi; while (a >= twoPi) a -= twoPi; return a; };
-    const glm::vec2 v = p - c->pos;
-    const float startA = std::atan2(s->pos.y - c->pos.y, s->pos.x - c->pos.x);
-    const float sweep  = wrap(std::atan2(e->pos.y - c->pos.y, e->pos.x - c->pos.x) - startA);
-    const float at     = wrap(std::atan2(v.y, v.x) - startA);
-    const bool full    = sweep < 1e-5f;                 // start == end: the whole circle
-    if (full || at <= sweep)
-        return std::abs(glm::length(v) - static_cast<float>(arc.radius));
-    return std::min(glm::distance(p, s->pos), glm::distance(p, e->pos));
-}
-
 int Sketch::addArc(int centerPtId, int startPtId, int endPtId, double radius) {
     SketchArc arc;
     arc.id = nextId();
@@ -633,54 +537,6 @@ int Sketch::addPolygon(int centerPtId, double radius, int sides, double rotation
     return polygon.id;
 }
 
-std::vector<SketchPolygon> Sketch::polygonsMadeOf(const std::set<int>& lineIds) const {
-    std::vector<SketchPolygon> out;
-    for (const auto& p : m_polygons) {
-        if (p.lineIds.empty()) continue;
-        bool whole = true;
-        for (int l : p.lineIds) if (!lineIds.count(l)) { whole = false; break; }
-        if (whole) out.push_back(p);
-    }
-    return out;
-}
-
-int Sketch::lineBetween(int a, int b) const {
-    for (const auto& l : m_lines)
-        if ((l.startPointId == a && l.endPointId == b) || (l.startPointId == b && l.endPointId == a))
-            return l.id;
-    return -1;
-}
-
-std::vector<int> Sketch::copyPolygonRecords(const std::vector<SketchPolygon>& src,
-                                            const std::function<int(int)>& mapPoint) {
-    std::vector<int> made;
-    for (const auto& p : src) {
-        if (p.vertexPointIds.size() < 3 || p.vertexPointIds.size() != p.lineIds.size()) continue;
-        SketchPolygon np;
-        np.centerPointId = mapPoint(p.centerPointId);
-        np.radius = p.radius;
-        np.sides = p.sides;
-        np.isConstruction = p.isConstruction;
-        bool ok = np.centerPointId >= 0;
-        for (int v : p.vertexPointIds) {
-            const int nv = ok ? mapPoint(v) : -1;
-            if (nv < 0) { ok = false; break; }
-            np.vertexPointIds.push_back(nv);
-        }
-        if (!ok) continue;
-        const size_t n = np.vertexPointIds.size();
-        for (size_t i = 0; i < n && ok; ++i) {
-            const int nl = lineBetween(np.vertexPointIds[i], np.vertexPointIds[(i + 1) % n]);
-            if (nl < 0) ok = false; else np.lineIds.push_back(nl);
-        }
-        if (!ok) continue;
-        np.id = nextId();
-        m_polygons.push_back(np);
-        made.push_back(np.id);
-    }
-    return made;
-}
-
 int Sketch::addRectangle(glm::vec2 corner1, glm::vec2 corner2) {
     // Create 4 corner points
     glm::vec2 c1 = corner1;
@@ -727,33 +583,6 @@ int Sketch::addRectangle(glm::vec2 corner1, glm::vec2 corner2) {
     addDistance(p2, p3); // height
 
     return firstLineId;
-}
-
-int Sketch::addRotatedRectangle(const glm::vec2 corners[4]) {
-    int p[4];
-    for (int i = 0; i < 4; ++i) p[i] = addPoint(corners[i]);
-    int l[4];
-    for (int i = 0; i < 4; ++i) l[i] = addLine(p[i], p[(i + 1) % 4]);
-
-    // No Horizontal / Vertical here - the sides are not axis-aligned. Square
-    // corners instead (three are enough, the fourth follows), so a later
-    // dimension cannot skew the box into a parallelogram.
-    auto addPerp = [&](int a, int b) {
-        Constraint c; c.id = 0; c.type = ConstraintType::Perpendicular;
-        c.entityA = a; c.entityB = b; c.isSatisfied = true; addConstraint(c);
-    };
-    addPerp(l[0], l[1]);
-    addPerp(l[1], l[2]);
-    addPerp(l[2], l[3]);
-    auto addDistance = [&](int a, int b) {
-        Constraint c; c.id = 0; c.type = ConstraintType::Distance;
-        c.entityA = a; c.entityB = b;
-        c.value = glm::length(getPoint(b)->pos - getPoint(a)->pos);
-        c.isSatisfied = true; addConstraint(c);
-    };
-    addDistance(p[0], p[1]);   // width
-    addDistance(p[1], p[2]);   // height
-    return l[0];
 }
 
 // Element access
@@ -994,132 +823,6 @@ void Sketch::removeElement(int id) {
         m_points.end());
 }
 
-namespace {
-// The two lines meeting at `pointId` and nothing else touching it, or false.
-struct CornerLines { int l0 = -1, l1 = -1, a = -1, b = -1; };
-}
-
-bool Sketch::isRoundableCorner(int pointId) const {
-    if (!getPoint(pointId)) return false;
-    int n = 0;
-    for (const auto& ln : m_lines)
-        if (ln.startPointId == pointId || ln.endPointId == pointId) ++n;
-    if (n != 2) return false;
-    for (const auto& a : m_arcs)
-        if (a.centerPointId == pointId || a.startPointId == pointId || a.endPointId == pointId) return false;
-    for (const auto& c : m_circles)
-        if (c.centerPointId == pointId) return false;
-    for (const auto& sp : m_splines)
-        if (std::find(sp.controlPointIds.begin(), sp.controlPointIds.end(), pointId) != sp.controlPointIds.end())
-            return false;
-    for (const auto& pg : m_polygons)
-        if (pg.centerPointId == pointId) return false;
-    return true;
-}
-
-bool Sketch::roundCorner(int pointId, double size, bool chamfer, std::vector<int>* createdIds) {
-    if (!(size > 0.0) || !isRoundableCorner(pointId)) return false;
-
-    CornerLines cl;
-    bool cons0 = false, cons1 = false;
-    for (const auto& ln : m_lines) {
-        if (ln.startPointId != pointId && ln.endPointId != pointId) continue;
-        const int other = ln.startPointId == pointId ? ln.endPointId : ln.startPointId;
-        if (cl.l0 < 0) { cl.l0 = ln.id; cl.a = other; cons0 = ln.isConstruction; }
-        else           { cl.l1 = ln.id; cl.b = other; cons1 = ln.isConstruction; }
-    }
-    const SketchPoint* P = getPoint(pointId);
-    const SketchPoint* A = getPoint(cl.a);
-    const SketchPoint* B = getPoint(cl.b);
-    if (!P || !A || !B || cl.a == cl.b) return false;
-
-    const glm::dvec2 p(P->pos), a(A->pos), b(B->pos);
-    glm::dvec2 u1 = a - p, u2 = b - p;
-    const double len1 = glm::length(u1), len2 = glm::length(u2);
-    if (len1 < 1e-6 || len2 < 1e-6) return false;
-    u1 /= len1; u2 /= len2;
-    const double theta = std::acos(std::clamp(glm::dot(u1, u2), -1.0, 1.0));
-    if (theta < 0.02 || theta > M_PI - 0.02) return false;   // (nearly) straight through, or folded back
-
-    // Setback from the corner to each tangent point.
-    const double t = chamfer ? size : size / std::tan(theta * 0.5);
-    // The cut may use the whole line: a side already trimmed at its far end by
-    // a neighbouring corner can still take exactly what is left. Only past the
-    // end is it refused.
-    constexpr double kFit = 1e-4;
-    if (t > len1 + kFit || t > len2 + kFit) return false;
-    // Spending the whole line puts the tangent point ON the far endpoint; that
-    // endpoint is reused instead of leaving a zero-length line beside it.
-    const bool eat1 = t >= len1 - kFit, eat2 = t >= len2 - kFit;
-
-    const glm::dvec2 t1 = eat1 ? a : p + u1 * t;
-    const glm::dvec2 t2 = eat2 ? b : p + u2 * t;
-
-    // A polygon's corner: the polygon record has no valid state with one corner
-    // cut, so it becomes plain lines first.
-    for (const auto& pg : m_polygons) {
-        if (std::find(pg.vertexPointIds.begin(), pg.vertexPointIds.end(), pointId) != pg.vertexPointIds.end()) {
-            explodePolygon(pg.id);
-            break;
-        }
-    }
-
-    removeElement(cl.l0);
-    removeElement(cl.l1);
-    removeElement(pointId);
-    // Constraints that named the corner or its two lines are meaningless now.
-    {
-        std::unordered_set<int> valid;
-        for (const auto& pt : m_points)   valid.insert(pt.id);
-        for (const auto& l : m_lines)     valid.insert(l.id);
-        for (const auto& c : m_circles)   valid.insert(c.id);
-        for (const auto& ar : m_arcs)     valid.insert(ar.id);
-        for (const auto& sp : m_splines)  valid.insert(sp.id);
-        for (const auto& pg : m_polygons) valid.insert(pg.id);
-        m_constraints.erase(
-            std::remove_if(m_constraints.begin(), m_constraints.end(),
-                [&](const Constraint& k) {
-                    return (k.entityA >= 0 && valid.find(k.entityA) == valid.end()) ||
-                           (k.entityB >= 0 && valid.find(k.entityB) == valid.end());
-                }),
-            m_constraints.end());
-    }
-
-    std::vector<int> made;
-    const int T1 = eat1 ? cl.a : addPoint(glm::vec2(t1));
-    const int T2 = eat2 ? cl.b : addPoint(glm::vec2(t2));
-    if (!eat1) made.push_back(T1);
-    if (!eat2) made.push_back(T2);
-    if (!eat1) {
-        const int n1 = addLine(cl.a, T1);
-        if (cons0) setElementConstruction(n1, true);
-        made.push_back(n1);
-    }
-    if (!eat2) {
-        const int n2 = addLine(T2, cl.b);
-        if (cons1) setElementConstruction(n2, true);
-        made.push_back(n2);
-    }
-
-    if (chamfer) {
-        const int bevel = addLine(T1, T2);
-        if (cons0 && cons1) setElementConstruction(bevel, true);
-        made.push_back(bevel);
-    } else {
-        const glm::dvec2 bis = glm::normalize(u1 + u2);
-        const glm::dvec2 c = p + bis * (size / std::sin(theta * 0.5));
-        const int C = addPoint(glm::vec2(c));
-        // Arcs run CCW from start to end; the fillet is the short way round.
-        const glm::dvec2 r1 = t1 - c, r2 = t2 - c;
-        const bool t1First = (r1.x * r2.y - r1.y * r2.x) > 0.0;
-        const int arc = t1First ? addArc(C, T1, T2, size) : addArc(C, T2, T1, size);
-        if (cons0 && cons1) setElementConstruction(arc, true);
-        made.push_back(C); made.push_back(arc);
-    }
-    if (createdIds) *createdIds = std::move(made);
-    return true;
-}
-
 bool Sketch::explodePolygon(int id) {
     auto it = std::find_if(m_polygons.begin(), m_polygons.end(),
         [id](const SketchPolygon& p) { return p.id == id; });
@@ -1128,43 +831,7 @@ bool Sketch::explodePolygon(int id) {
     return true;
 }
 
-void Sketch::removeElements(const std::vector<int>& idsIn) {
-    // A point can't be deleted out from under the geometry that uses it: a line
-    // left pointing at a missing point stays in the sketch but drops out of
-    // every profile (the loop it closed no longer closes, and the body built
-    // from it stops following the sketch). Take the lines, arcs and circles
-    // anchored on a deleted point with it, and shorten a spline that loses a
-    // control point rather than deleting the whole curve.
-    std::vector<int> ids = idsIn;
-    {
-        // A polygon's vertices and centre are not erased by this call at all -
-        // the polygon cascades instead, and a point other geometry still uses
-        // survives it - so they have nothing to take along.
-        std::unordered_set<int> polygonPoints;
-        for (const auto& pg : m_polygons) {
-            polygonPoints.insert(pg.centerPointId);
-            polygonPoints.insert(pg.vertexPointIds.begin(), pg.vertexPointIds.end());
-        }
-        std::unordered_set<int> gone;
-        for (int id : idsIn)
-            if (getPoint(id) && !polygonPoints.count(id)) gone.insert(id);
-        if (!gone.empty()) {
-            auto has = [&](int pid) { return gone.count(pid) != 0; };
-            for (const auto& l : m_lines)
-                if (has(l.startPointId) || has(l.endPointId)) ids.push_back(l.id);
-            for (const auto& a : m_arcs)
-                if (has(a.centerPointId) || has(a.startPointId) || has(a.endPointId))
-                    ids.push_back(a.id);
-            for (const auto& c : m_circles)
-                if (has(c.centerPointId)) ids.push_back(c.id);
-            for (auto& sp : m_splines) {
-                auto& cp = sp.controlPointIds;
-                if (std::none_of(cp.begin(), cp.end(), has)) continue;
-                cp.erase(std::remove_if(cp.begin(), cp.end(), has), cp.end());
-                if (cp.size() < 2) ids.push_back(sp.id);
-            }
-        }
-    }
+void Sketch::removeElements(const std::vector<int>& ids) {
     // Resolve every polygon touched by ANY id in this batch against the
     // sketch's state BEFORE deleting anything. A batch selection can contain
     // more than one piece of the same polygon (two vertices, an edge plus a
@@ -1250,7 +917,6 @@ void Sketch::clear() {
     m_polygons.clear();
     m_constraints.clear();
     m_fillAnchors.clear();
-    m_origin.clear();
     m_nextId = 1;
     m_nextConstraintId = 1;
 }
@@ -1390,40 +1056,33 @@ Sketch Sketch::withoutConstruction() const {
     return out;
 }
 
-TopoDS_Wire Sketch::buildOpenWire(bool exact) const {
-    if (hasConstructionGeometry()) return withoutConstruction().buildOpenWire(exact);
+TopoDS_Wire Sketch::buildOpenWire() const {
+    if (hasConstructionGeometry()) return withoutConstruction().buildOpenWire();
     struct ChainEdge {
         int a = -1, b = -1;                 // endpoint point-ids
         std::vector<glm::vec2> pts;         // samples a → b (inclusive)
         bool used = false;
         double len = 0.0;
-        int kind = 0;                       // 0 line, 1 arc, 2 spline (exact mode)
-        int idx = -1;                       // index into m_lines / m_arcs / m_splines
-        float sA = 0.0f, eA = 0.0f;         // arc angles, CCW from sA
     };
     std::vector<ChainEdge> edges;
 
-    auto pushEdge = [&](int a, int b, std::vector<glm::vec2> pts, int kind, int idx,
-                        float sA = 0.0f, float eA = 0.0f) {
+    auto pushEdge = [&](int a, int b, std::vector<glm::vec2> pts) {
         if (pts.size() < 2) return;
         ChainEdge e;
         e.a = a; e.b = b; e.pts = std::move(pts);
-        e.kind = kind; e.idx = idx; e.sA = sA; e.eA = eA;
         for (size_t i = 1; i < e.pts.size(); ++i)
             e.len += glm::length(e.pts[i] - e.pts[i - 1]);
         if (e.len > 1e-9) edges.push_back(std::move(e));
     };
 
-    for (size_t li = 0; li < m_lines.size(); ++li) {
-        const auto& ln = m_lines[li];
+    for (const auto& ln : m_lines) {
         if (ln.isConstruction) continue;
         const SketchPoint* a = getPoint(ln.startPointId);
         const SketchPoint* b = getPoint(ln.endPointId);
         if (!a || !b) continue;
-        pushEdge(ln.startPointId, ln.endPointId, {a->pos, b->pos}, 0, static_cast<int>(li));
+        pushEdge(ln.startPointId, ln.endPointId, {a->pos, b->pos});
     }
-    for (size_t ai = 0; ai < m_arcs.size(); ++ai) {
-        const auto& arc = m_arcs[ai];
+    for (const auto& arc : m_arcs) {
         if (arc.isConstruction) continue;
         const SketchPoint* c = getPoint(arc.centerPointId);
         const SketchPoint* a = getPoint(arc.startPointId);
@@ -1440,16 +1099,15 @@ TopoDS_Wire Sketch::buildOpenWire(bool exact) const {
             pts.emplace_back(c->pos.x + std::cos(ang) * static_cast<float>(arc.radius),
                              c->pos.y + std::sin(ang) * static_cast<float>(arc.radius));
         }
-        pushEdge(arc.startPointId, arc.endPointId, std::move(pts), 1, static_cast<int>(ai), sA, eA);
+        pushEdge(arc.startPointId, arc.endPointId, std::move(pts));
     }
-    for (size_t si = 0; si < m_splines.size(); ++si) {
-        const auto& sp = m_splines[si];
+    for (const auto& sp : m_splines) {
         if (sp.isConstruction || sp.controlPointIds.size() < 2) continue;
         // Closed splines belong to the region machinery, not rails.
         if (sp.controlPointIds.front() == sp.controlPointIds.back()) continue;
         auto pts = sampleSpline2D(sp);
         pushEdge(sp.controlPointIds.front(), sp.controlPointIds.back(),
-                 std::move(pts), 2, static_cast<int>(si));
+                 std::move(pts));
     }
     if (edges.empty()) return {};
 
@@ -1460,13 +1118,11 @@ TopoDS_Wire Sketch::buildOpenWire(bool exact) const {
     // Walk from every degree-1 node, following unused edges; keep the longest
     // chain by 2D length.
     std::vector<glm::vec2> best;
-    std::vector<std::pair<const ChainEdge*, int>> bestSeq;   // edge, point it is entered from
     double bestLen = -1.0;
     for (const auto& [startPt, deg] : degree) {
         if (deg != 1) continue;
         for (auto& e : edges) e.used = false;
         std::vector<glm::vec2> chain;
-        std::vector<std::pair<const ChainEdge*, int>> seq;
         double len = 0.0;
         int at = startPt;
         for (;;) {
@@ -1475,7 +1131,6 @@ TopoDS_Wire Sketch::buildOpenWire(bool exact) const {
                 if (!e.used && (e.a == at || e.b == at)) { next = &e; break; }
             if (!next) break;
             next->used = true;
-            seq.emplace_back(next, at);
             len += next->len;
             std::vector<glm::vec2> run = next->pts;
             if (next->b == at) std::reverse(run.begin(), run.end());
@@ -1486,60 +1141,9 @@ TopoDS_Wire Sketch::buildOpenWire(bool exact) const {
         if (chain.size() >= 2 && len > bestLen) {
             bestLen = len;
             best = std::move(chain);
-            bestSeq = std::move(seq);
         }
     }
     if (best.size() < 2) return {};
-
-    if (exact) {
-        // Real edges, walked in chain order from the end the chain starts at.
-        BRepBuilderAPI_MakeWire wm;
-        for (const auto& [e, from] : bestSeq) {
-            const bool rev = (from == e->b);
-            try {
-                if (e->kind == 0) {
-                    const SketchLine& ln = m_lines[e->idx];
-                    const SketchPoint* pa = getPoint(ln.startPointId);
-                    const SketchPoint* pb = getPoint(ln.endPointId);
-                    gp_Pnt p1 = sketchToWorld(rev ? pb->pos : pa->pos);
-                    gp_Pnt p2 = sketchToWorld(rev ? pa->pos : pb->pos);
-                    BRepBuilderAPI_MakeEdge mk(p1, p2);
-                    if (!mk.IsDone()) return {};
-                    wm.Add(mk.Edge());
-                } else if (e->kind == 1) {
-                    const SketchArc& arc = m_arcs[e->idx];
-                    const SketchPoint* c0 = getPoint(arc.centerPointId);
-                    const SketchPoint* pa = getPoint(arc.startPointId);
-                    const SketchPoint* pb = getPoint(arc.endPointId);
-                    const float aMid = 0.5f * (e->sA + e->eA);
-                    gp_Pnt mid = sketchToWorld(glm::vec2(
-                        c0->pos.x + std::cos(aMid) * static_cast<float>(arc.radius),
-                        c0->pos.y + std::sin(aMid) * static_cast<float>(arc.radius)));
-                    GC_MakeArcOfCircle am(sketchToWorld(rev ? pb->pos : pa->pos), mid,
-                                          sketchToWorld(rev ? pa->pos : pb->pos));
-                    if (!am.IsDone()) return {};
-                    BRepBuilderAPI_MakeEdge mk(am.Value());
-                    if (!mk.IsDone()) return {};
-                    wm.Add(mk.Edge());
-                } else {
-                    std::vector<glm::vec2> samp = e->pts;
-                    if (rev) std::reverse(samp.begin(), samp.end());
-                    thinSamplesForFit(samp);
-                    if (samp.size() < 2) return {};
-                    TColgp_Array1OfPnt arr(1, static_cast<int>(samp.size()));
-                    for (size_t k = 0; k < samp.size(); ++k)
-                        arr.SetValue(static_cast<int>(k) + 1, sketchToWorld(samp[k]));
-                    GeomAPI_PointsToBSpline fit(arr, std::min(3, static_cast<int>(samp.size()) - 1), 8,
-                                                GeomAbs_C2, 1.0e-3);
-                    if (!fit.IsDone()) return {};
-                    BRepBuilderAPI_MakeEdge mk(fit.Curve());
-                    if (!mk.IsDone()) return {};
-                    wm.Add(mk.Edge());
-                }
-            } catch (...) { return {}; }
-        }
-        return wm.IsDone() ? wm.Wire() : TopoDS_Wire();
-    }
 
     BRepBuilderAPI_MakePolygon poly;
     for (const auto& p2 : best) poly.Add(sketchToWorld(p2));
@@ -2205,42 +1809,6 @@ void densifyWire2D(const TopoDS_Wire& wire, const gp_Pln& plane,
 }
 
 // Standard ray-cast point-in-polygon (winding-independent, counts crossings).
-//
-// A point STRICTLY inside a region (outer wire minus holes), for the cases where
-// the area centroid is not: a ring's lies in its hole, a crescent's outside its
-// own band. Horizontal scanlines through the densified loops; the midpoint of
-// the widest span between an entry and an exit (even-odd across outer and hole
-// loops alike) is as far from the boundary as the sampling can find. Returns
-// false for a degenerate region with no span.
-bool interiorPoint2D(const std::vector<std::vector<glm::vec2>>& loops, glm::vec2& out) {
-    float ymin = 1e30f, ymax = -1e30f;
-    for (const auto& l : loops)
-        for (const auto& p : l) { ymin = std::min(ymin, p.y); ymax = std::max(ymax, p.y); }
-    if (!(ymax > ymin)) return false;
-    float bestW = 0.0f;
-    constexpr int kScanlines = 24;
-    std::vector<float> xs;
-    for (int k = 0; k < kScanlines; ++k) {
-        const float y = ymin + (ymax - ymin) * (static_cast<float>(k) + 0.5f) / kScanlines;
-        xs.clear();
-        for (const auto& l : loops) {
-            const size_t n = l.size();
-            for (size_t i = 0, j = n - 1; i < n; j = i++) {
-                const glm::vec2& a = l[i];
-                const glm::vec2& b = l[j];
-                if ((a.y > y) == (b.y > y)) continue;
-                xs.push_back(a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y));
-            }
-        }
-        std::sort(xs.begin(), xs.end());
-        for (size_t i = 0; i + 1 < xs.size(); i += 2) {
-            const float w = xs[i + 1] - xs[i];
-            if (w > bestW) { bestW = w; out = glm::vec2(0.5f * (xs[i] + xs[i + 1]), y); }
-        }
-    }
-    return bestW > 1e-6f;
-}
-
 // Tolerance (mm) the region build treats two edges as coincident at. Sketch
 // points are float32, so a sketch line drawn along a host-face edge lands a
 // few 1e-6 mm to 1e-4 mm off it - not exactly on it, which is the one case
@@ -2875,25 +2443,7 @@ std::vector<Sketch::Region> Sketch::buildRegionsUncached(
             rep = toSketch2D(props.CentreOfMass());
         } catch (...) {}
         if (region.outerWire.IsNull() || !isPointInRegion(region, rep)) {
-            if (!region.outerWire.IsNull()) {
-                // A point ON the outer wire was the fallback, and a thin crescent's
-                // first edge is its end cap: the point sat exactly on the boundary,
-                // where the containment tests disagree with themselves - so
-                // drawnRegions() lost the region (Sketch 2 of 11-3-26 b2_2 got one
-                // tint of two). Prefer a point genuinely inside.
-                std::vector<std::vector<glm::vec2>> loops(1);
-                densifyWire2D(region.outerWire, m_plane, loops[0]);
-                for (const auto& hw : region.holeWires) {
-                    loops.emplace_back();
-                    densifyWire2D(hw, m_plane, loops.back());
-                }
-                glm::vec2 inside(0);
-                if (loops[0].size() >= 3 && interiorPoint2D(loops, inside) &&
-                    isPointInRegion(region, inside))
-                    rep = inside;
-                else
-                    rep = sampleWirePoint(region.outerWire, m_plane);
-            }
+            if (!region.outerWire.IsNull()) rep = sampleWirePoint(region.outerWire, m_plane);
         }
         region.representativePoint = rep;
 
@@ -2921,175 +2471,6 @@ std::vector<int> Sketch::drawnRegions(const std::vector<Region>& regions) const 
         }
     }
     return out;
-}
-
-namespace {
-// Outer loop + hole loops of a region, densified once for repeated tests.
-struct RegionPolys {
-    std::vector<glm::vec2> outer;
-    std::vector<std::vector<glm::vec2>> holes;
-    bool contains(glm::vec2 p) const {
-        if (!pointInPolygon2D(outer, p)) return false;
-        for (const auto& h : holes)
-            if (pointInPolygon2D(h, p)) return false;
-        return true;
-    }
-};
-RegionPolys regionPolys(const Sketch::Region& r, const gp_Pln& pln) {
-    RegionPolys rp;
-    densifyWire2D(r.outerWire, pln, rp.outer);
-    for (const auto& h : r.holeWires) {
-        rp.holes.emplace_back();
-        densifyWire2D(h, pln, rp.holes.back());
-    }
-    return rp;
-}
-} // namespace
-
-std::vector<glm::vec2> Sketch::drawnRegionSamples(const std::vector<Region>& regions,
-                                                  int perRegion, size_t maxRegions) const {
-    std::vector<glm::vec2> out;
-    if (regions.empty() || regions.size() > maxRegions) return out;
-    const double fr[5] = {0.5, 0.25, 0.75, 0.125, 0.875};
-    for (int idx : drawnRegions(regions)) {
-        const Region& r = regions[idx];
-        const RegionPolys rp = regionPolys(r, m_plane);
-        if (rp.outer.size() < 3) continue;
-        glm::vec2 lo = rp.outer[0], hi = rp.outer[0];
-        for (const auto& q : rp.outer) { lo = glm::min(lo, q); hi = glm::max(hi, q); }
-        int added = 0;
-        if (rp.contains(r.representativePoint)) { out.push_back(r.representativePoint); ++added; }
-        for (double a : fr)
-            for (double b : fr) {
-                if (added >= perRegion) break;
-                const glm::vec2 p(lo.x + (hi.x - lo.x) * static_cast<float>(a),
-                                  lo.y + (hi.y - lo.y) * static_cast<float>(b));
-                if (rp.contains(p)) { out.push_back(p); ++added; }
-            }
-    }
-    return out;
-}
-
-void Sketch::setElementOrigin(int newId, int srcId) {
-    if (newId == srcId) return;
-    m_origin[newId] = elementRoot(srcId);
-}
-
-int Sketch::elementRoot(int id) const {
-    auto it = m_origin.find(id);
-    return it != m_origin.end() ? it->second : id;
-}
-
-std::vector<int> Sketch::faceRootSignature(const TopoDS_Face& face) const {
-    std::vector<int> out;
-    if (face.IsNull()) return out;
-
-    const gp_Ax3 ax = m_plane.Position();
-    const gp_Pnt origin = ax.Location();
-    const gp_Dir xd = ax.XDirection(), yd = ax.YDirection();
-    auto to2D = [&](const gp_Pnt& w) {
-        gp_Vec v(origin, w);
-        return glm::vec2(static_cast<float>(v.Dot(gp_Vec(xd))),
-                         static_cast<float>(v.Dot(gp_Vec(yd))));
-    };
-
-    // One candidate per sketch curve, tested against a 2D point.
-    struct Cand { int id; std::function<bool(glm::vec2)> on; };
-    std::vector<Cand> cands;
-    constexpr float kTol = 1e-2f;   // the region builder's own on-line tolerance
-    auto distSeg = [](glm::vec2 q, glm::vec2 a, glm::vec2 b) {
-        const glm::vec2 ab = b - a;
-        const float l2 = glm::dot(ab, ab);
-        const float t = l2 > 1e-12f ? glm::clamp(glm::dot(q - a, ab) / l2, 0.0f, 1.0f) : 0.0f;
-        return glm::length(q - (a + t * ab));
-    };
-    for (const auto& l : m_lines) {
-        if (l.isConstruction) continue;
-        const SketchPoint* a = getPoint(l.startPointId);
-        const SketchPoint* b = getPoint(l.endPointId);
-        if (!a || !b) continue;
-        const glm::vec2 pa = a->pos, pb = b->pos;
-        cands.push_back({l.id, [=](glm::vec2 q) { return distSeg(q, pa, pb) < kTol; }});
-    }
-    for (const auto& c : m_circles) {
-        if (c.isConstruction) continue;
-        const SketchPoint* ctr = getPoint(c.centerPointId);
-        if (!ctr) continue;
-        const glm::vec2 cp = ctr->pos;
-        const float r = static_cast<float>(c.radius);
-        cands.push_back({c.id, [=](glm::vec2 q) {
-            return std::abs(glm::length(q - cp) - r) < kTol; }});
-    }
-    for (const auto& a : m_arcs) {
-        if (a.isConstruction) continue;
-        const SketchPoint* ctr = getPoint(a.centerPointId);
-        const SketchPoint* s = getPoint(a.startPointId);
-        const SketchPoint* e = getPoint(a.endPointId);
-        if (!ctr || !s || !e) continue;
-        const glm::vec2 cp = ctr->pos;
-        const float r = static_cast<float>(a.radius);
-        const float twoPi = 6.28318530718f;
-        const float a0 = std::atan2(s->pos.y - cp.y, s->pos.x - cp.x);
-        float span = std::atan2(e->pos.y - cp.y, e->pos.x - cp.x) - a0;
-        while (span < 0.0f) span += twoPi;
-        // Arcs run counter-clockwise from start to end. The slack covers the
-        // sample sitting right at an endpoint.
-        const float slack = (kTol * 2.0f) / std::max(r, 1e-3f);
-        cands.push_back({a.id, [=](glm::vec2 q) {
-            if (std::abs(glm::length(q - cp) - r) >= kTol) return false;
-            float d = std::atan2(q.y - cp.y, q.x - cp.x) - a0;
-            while (d < 0.0f) d += twoPi;
-            while (d >= twoPi) d -= twoPi;
-            return d <= span + slack || d >= twoPi - slack;
-        }});
-    }
-    for (const auto& sp : m_splines) {
-        if (sp.isConstruction) continue;
-        std::vector<glm::vec2> poly = sampleSpline2D(sp);
-        if (poly.size() < 2) continue;
-        // The B-spline the fuse emits and this polyline agree to well inside the
-        // chord sag, which is looser than a straight line's tolerance.
-        cands.push_back({sp.id, [poly = std::move(poly), distSeg](glm::vec2 q) {
-            for (size_t i = 0; i + 1 < poly.size(); ++i)
-                if (distSeg(q, poly[i], poly[i + 1]) < 0.05f) return true;
-            return false;
-        }});
-    }
-    if (cands.empty() || cands.size() > 2000) return out;
-
-    std::set<int> roots;
-    try {
-        for (TopExp_Explorer ex(face, TopAbs_EDGE); ex.More(); ex.Next()) {
-            BRepAdaptor_Curve c(TopoDS::Edge(ex.Current()));
-            const double f = c.FirstParameter(), l = c.LastParameter();
-            const double fr[3] = {0.25, 0.5, 0.75};
-            glm::vec2 pts[3];
-            for (int i = 0; i < 3; ++i) pts[i] = to2D(c.Value(f + (l - f) * fr[i]));
-            for (const Cand& cd : cands) {
-                int hit = 0;
-                for (const auto& q : pts) if (cd.on(q)) ++hit;
-                if (hit >= 2) roots.insert(elementRoot(cd.id));
-            }
-        }
-    } catch (...) {
-        return {};
-    }
-    out.assign(roots.begin(), roots.end());
-    return out;
-}
-
-std::vector<int> Sketch::regionsMissingFrom(const std::vector<Region>& regions,
-                                            const std::vector<glm::vec2>& known) const {
-    std::vector<int> fresh;
-    for (int idx : drawnRegions(regions)) {
-        const RegionPolys rp = regionPolys(regions[idx], m_plane);
-        if (rp.outer.size() < 3) continue;
-        bool held = false;
-        for (const auto& k : known)
-            if (rp.contains(k)) { held = true; break; }
-        if (!held) fresh.push_back(idx);
-    }
-    return fresh;
 }
 
 bool Sketch::isPointInRegion(const Region& region, glm::vec2 p) const {

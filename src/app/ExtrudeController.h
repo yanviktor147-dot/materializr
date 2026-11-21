@@ -33,8 +33,7 @@ public:
     // A Subtract may pass targetBody = -1: the body to cut is then resolved
     // from the swept volume at commit (see resolveCutTarget).
     bool beginExtrude(const IopContext& ctx, const TopoDS_Shape& profile,
-                      ExtrudeMode mode, int targetBody, int sourceSketchId,
-                      SketchScope scope = SketchScope::Whole);
+                      ExtrudeMode mode, int targetBody, int sourceSketchId);
 
     // The arrow's frame - Application still DRAWS the dimension arrow (it
     // shares the extrude/push-pull/edge-op arrow renderer).
@@ -110,7 +109,6 @@ private:
     // surprise. Per-gesture, not persisted.
     bool m_cutAllBodies = false;
     int m_sketchId = -1;
-    SketchScope m_scope = SketchScope::Whole;
     glm::vec3 m_normal{0, 0, 1};
     glm::vec3 m_origin{0};
     float m_distance = 5.0f;

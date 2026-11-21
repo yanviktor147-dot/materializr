@@ -24,7 +24,6 @@
 #include "modeling/SketchTool.h"
 #include "modeling/ExtrudeOp.h"
 #include "modeling/RevolveOp.h"
-#include "modeling/SweepOp.h"
 #include "modeling/PushPullOp.h"
 #include "modeling/MoveFaceOp.h"
 #include "modeling/MoveHoleOp.h"
@@ -332,10 +331,10 @@ void Application::cancelThread() {
 
 void Application::beginInteractiveExtrude(const TopoDS_Shape& profile,
                                           ExtrudeMode mode, int targetBody,
-                                          int sourceSketchId, SketchScope scope) {
+                                          int sourceSketchId) {
     cancelAllInteractivePreviews();
     m_extrudeCtl.beginExtrude(iopContext(), profile, mode, targetBody,
-                              sourceSketchId, scope);
+                              sourceSketchId);
 }
 
 void Application::updateInteractiveExtrude(bool applySnap) {
@@ -680,18 +679,16 @@ int Application::userAxisToWorldIdx(int userIdx) {
 
 void Application::beginPattern(PatternKind kind) {
     cancelActiveIops();
-    // Every selected body is a source: PatternOp lays a run of copies for each.
-    std::vector<int> bodyIds;
+    // Find the first selected body. PatternOp clones one source body.
+    int bodyId = -1;
     if (m_selection) {
         for (const auto& e : m_selection->getSelection()) {
-            if (e.type != SelectionType::Body || e.bodyId < 0) continue;
-            if (std::find(bodyIds.begin(), bodyIds.end(), e.bodyId) == bodyIds.end())
-                bodyIds.push_back(e.bodyId);
+            if (e.type == SelectionType::Body && e.bodyId >= 0) {
+                bodyId = e.bodyId; break;
+            }
         }
     }
-    if (bodyIds.empty()) return;
-    const int bodyId = bodyIds.front();
-    m_patternBodyIds = bodyIds;
+    if (bodyId < 0) return;
 
     m_patternKind   = kind;
     m_patternBodyId = bodyId;
@@ -705,12 +702,8 @@ void Application::beginPattern(PatternKind kind) {
     // ring immediately and can re-pick the origin via the viewport.
     m_patternOriginX = m_patternOriginY = m_patternOriginZ = 0.0f;
     try {
-        // Union box of every source, so the default rotation axis runs through
-        // the middle of the whole selection rather than the first body.
         Bnd_Box bb;
-        for (int id : bodyIds) {
-            try { BRepBndLib::Add(m_document->getBody(id), bb); } catch (...) {}
-        }
+        BRepBndLib::Add(m_document->getBody(bodyId), bb);
         if (!bb.IsVoid()) {
             double x0,y0,z0,x1,y1,z1; bb.Get(x0,y0,z0,x1,y1,z1);
             m_patternOriginX = static_cast<float>((x0 + x1) * 0.5);
@@ -729,92 +722,7 @@ void Application::beginPattern(PatternKind kind) {
     updatePattern(); // initial preview
 }
 
-long Application::patternCopyCount() const {
-    const long sources = m_patternBodyIds.empty() ? 1L : static_cast<long>(m_patternBodyIds.size());
-    return std::max(0, m_patternCount - 1) * sources;
-}
-
-// From this many copies the preview takes long enough (each is a body to
-// tessellate and upload) that the window looked frozen; below it the card would
-// only flash.
-static constexpr long kHeavyPatternCopies = 150;
-
 void Application::updatePattern() {
-    if (!m_patternActive || m_patternBodyId < 0) return;
-    if (patternCopyCount() < kHeavyPatternCopies) { updatePatternNow(); return; }
-    // Big: rebuild it between frames behind the progress card. One queued
-    // rebuild covers a burst of edits - it reads the values current when it runs.
-    if (m_patternUpdateQueued) return;
-    m_patternUpdateQueued = true;
-    m_deferredHeavy.queue([this]() {
-        m_patternUpdateQueued = false;
-        if (!m_patternActive || m_patternBodyId < 0 || !m_document) return;
-        if (patternCopyCount() < kHeavyPatternCopies) { updatePatternNow(); return; }
-        const bool cancelled = runWithMeshProgress(
-            materializr::tr("Creating copies\xE2\x80\xA6"), [this]() { updatePatternNow(); });
-        // Cancel on the card = cancel the pattern, same as the popup's Cancel.
-        if (cancelled && m_patternActive) cancelPattern();
-    });
-}
-
-void Application::runHeavyPluginTask(std::string label,
-                                     std::function<void(const std::function<bool(float, const char*)>&)> task) {
-    m_deferredHeavy.queue([this, label = std::move(label), task = std::move(task)]() {
-        if (!m_document) return;
-        m_progressCancelled = false;
-        const auto before = materializr::snapshotBodies(*m_document);
-        const auto t0 = std::chrono::steady_clock::now();
-        // No card for work that finishes at once: the reporter only draws after
-        // 300 ms. (It keeps answering Cancel either way.)
-        task([this, t0, label](float f, const char* l) {
-            if (std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(300))
-                return m_progressCancelled;
-            // The task may name the step it is on ("Boolean 2 / 5"); without one the
-            // card says what the user asked for.
-            return renderProgressFrame(f, (l && *l) ? l : label.c_str());
-        });
-        for (int id : materializr::changedBodies(before, *m_document)) markBodyDirty(id);
-        markDirty();
-    });
-}
-
-bool Application::runWithMeshProgress(const char* label, const std::function<void()>& apply) {
-    if (!m_document) return false;
-    m_progressCancelled = false;              // -1 below does not reset the latch itself
-    renderProgressFrame(-1.0f, label);
-    struct PumpGuard {
-        bool& flag;
-        bool previous;
-        ~PumpGuard() { flag = previous; }
-    } guard{m_pumpMeshProgress, m_pumpMeshProgress};
-    m_pumpMeshProgress = true;
-    // Cancel here means "undo what you just did" (the callers do), so it may cut
-    // the mesh work short instead of grinding through the whole batch.
-    struct AbortGuard {
-        bool& flag; bool previous;
-        ~AbortGuard() { flag = previous; }
-    } abortGuard{m_meshProgressAbortable, m_meshProgressAbortable};
-    m_meshProgressAbortable = true;
-    // Tessellate only what this edit added: bodies that already existed may
-    // carry a mesh the pool's plain path must not touch (see queueHeavyImport).
-    const auto before = m_document->getAllBodyIds();
-    const std::set<int> beforeIds(before.begin(), before.end());
-    apply();
-    const bool cancelled = prewarmMeshPool([this, beforeIds]() {
-        std::vector<int> ids;
-        for (int id : m_document->getAllBodyIds())
-            if (!beforeIds.count(id)) ids.push_back(id);
-        return ids;
-    }, label, "heavy-parmesh");
-    // Cancelled: the caller takes the new bodies straight back out, so skip meshing
-    // them and the rebuild that would follow (the freeze after Cancel).
-    if (cancelled || m_progressCancelled) return true;
-    rebuildMeshes();   // pool-meshed shapes are cheap here; the rest are pumped under the card
-    m_meshesDirty = false;
-    return m_progressCancelled;
-}
-
-void Application::updatePatternNow() {
     if (!m_patternActive || m_patternBodyId < 0) return;
     auto trackBodies = trackBodyChanges(); // marks what this edit changed
 
@@ -831,7 +739,7 @@ void Application::updatePatternNow() {
     if (!m_patternPreview.op())
         m_patternPreview.hold(std::make_unique<PatternOp>(), *m_document);
     auto* op = static_cast<PatternOp*>(m_patternPreview.op());
-    op->setBodies(m_patternBodyIds.empty() ? std::vector<int>{m_patternBodyId} : m_patternBodyIds);
+    op->setBody(m_patternBodyId);
 
     // Axis direction comes from the chosen world axis, or - when the user
     // picked a construction axis from the dropdown - from that axis's own
@@ -867,9 +775,6 @@ void Application::updatePatternNow() {
 }
 
 void Application::commitPattern() {
-    // A big preview rebuild still waiting for its turn must land before the op
-    // is recorded, or the committed copy would be the previous parameters'.
-    if (m_patternUpdateQueued) { m_patternUpdateQueued = false; updatePatternNow(); }
     auto trackBodies = trackBodyChanges(); // marks what this edit changed
     // The previewed instance IS the final op - record it without re-running
     // it. (It used to already BE a history step by this point, which is what
@@ -878,17 +783,14 @@ void Application::commitPattern() {
     m_patternActive        = false;
     m_patternPickingOrigin = false;
     m_patternBodyId        = -1;
-    m_patternBodyIds.clear();
 }
 
 void Application::cancelPattern() {
-    m_patternUpdateQueued = false;   // a queued rebuild of a cancelled pattern does nothing
     auto trackBodies = trackBodyChanges(); // marks what this edit changed
     m_patternPreview.clear(*m_document);
     m_patternActive        = false;
     m_patternPickingOrigin = false;
     m_patternBodyId        = -1;
-    m_patternBodyIds.clear();
 }
 
 // ─── Loft (interactive popup) ──────────────────────────────────────────────
@@ -908,7 +810,31 @@ void Application::cancelPattern() {
 static TopoDS_Wire outermostRegionWire(materializr::Sketch* sk,
                                        std::vector<TopoDS_Wire>& holesOut,
                                        bool* fromRegionOut = nullptr) {
-    return LoftOp::sectionFromSketch(sk, holesOut, fromRegionOut);
+    holesOut.clear();
+    if (fromRegionOut) *fromRegionOut = false;
+    if (!sk) return {};
+    auto regions = sk->buildRegions();
+    if (!regions.empty()) {
+        size_t best = 0;
+        double bestDiag = -1.0;
+        for (size_t i = 0; i < regions.size(); ++i) {
+            if (regions[i].outerWire.IsNull()) continue;
+            Bnd_Box bb;
+            BRepBndLib::Add(regions[i].outerWire, bb);
+            if (bb.IsVoid()) continue;
+            double x0, y0, z0, x1, y1, z1;
+            bb.Get(x0, y0, z0, x1, y1, z1);
+            double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+            double diag = dx * dx + dy * dy + dz * dz;
+            if (diag > bestDiag) { bestDiag = diag; best = i; }
+        }
+        holesOut = regions[best].holeWires;
+        if (fromRegionOut) *fromRegionOut = true;   // regions are closed loops
+        return regions[best].outerWire;
+    }
+    auto wires = sk->buildWires();
+    if (!wires.empty()) return wires[0];
+    return {};
 }
 
 // The outer boundary of a face, as a loft section.
@@ -1119,8 +1045,7 @@ void Application::updateLoft() {
         }
         held->setBase(m_loftSections[0].outer, m_loftBasePlane);
         held->clearRails();
-        for (const LoftRail& r : m_loftRails) held->addRail(r.wire, r.sketchId);
-        held->setBaseSketch(m_loftSections[0].sketchId);
+        for (const LoftRail& r : m_loftRails) held->addRail(r.wire);
         held->setSolid(m_loftSolid);
         if (!m_loftPreview.apply(*m_document))
             showToast(materializr::tr("Guided loft failed - rails must rise away from the "
@@ -1145,9 +1070,9 @@ void Application::updateLoft() {
             holes.reserve(sec.holes.size());
             for (const auto& h : sec.holes)
                 holes.push_back(TopoDS::Wire(h.Reversed()));
-            op->addProfile(TopoDS::Wire(sec.outer.Reversed()), holes, sec.sketchId, true);
+            op->addProfile(TopoDS::Wire(sec.outer.Reversed()), holes);
         } else {
-            op->addProfile(sec.outer, sec.holes, sec.sketchId, false);
+            op->addProfile(sec.outer, sec.holes);
         }
     }
     op->setSolid(m_loftSolid);
@@ -1165,92 +1090,6 @@ void Application::commitLoft() {
     m_loftSections.clear();
     m_loftRails.clear();
     m_loftRailsMode = false;
-}
-
-// ─── Sweep (interactive popup) ──────────────────────────────────────────────
-//
-// SweepPlugin (in LoftPlugin.cpp) fires requestInteractiveOp(Sweep). beginSweep
-// sorts the selected sketches into a closed PROFILE and a PATH: the closed one is
-// the profile and the open one the path; with two closed sketches the first
-// picked is the profile (Swap in the panel flips them). One SweepOp is then
-// toggled against the document as the live preview, committed on Apply.
-
-void Application::beginSweep() {
-    if (refuseMeshSelection("Sweep")) return;
-    if (!m_selection || !m_document) return;
-
-    std::vector<int> sketchIds;
-    for (const auto& e : m_selection->getSelection()) {
-        if ((e.type == SelectionType::Sketch || e.type == SelectionType::SketchRegion) &&
-            e.sketchId >= 0 &&
-            std::find(sketchIds.begin(), sketchIds.end(), e.sketchId) == sketchIds.end())
-            sketchIds.push_back(e.sketchId);
-    }
-    if (sketchIds.size() != 2) {
-        showToast(materializr::tr("Sweep needs exactly two sketches: a closed profile and the "
-                                  "path it follows. Ctrl-click both, then click Sweep."), 6.0);
-        return;
-    }
-    // Closed = it has a region to sweep; open = it has a chain to follow.
-    auto isClosed = [&](int id) {
-        auto sk = m_document->getSketch(id);
-        return sk && !RevolveOp::profileFromSketch(*sk).IsNull();
-    };
-    auto isOpen = [&](int id) {
-        auto sk = m_document->getSketch(id);
-        return sk && !sk->buildOpenWire(true).IsNull();
-    };
-    int profile = sketchIds[0], path = sketchIds[1];
-    const bool c0 = isClosed(sketchIds[0]), c1 = isClosed(sketchIds[1]);
-    if (c0 && !c1 && isOpen(sketchIds[1])) { profile = sketchIds[0]; path = sketchIds[1]; }
-    else if (c1 && !c0 && isOpen(sketchIds[0])) { profile = sketchIds[1]; path = sketchIds[0]; }
-    else if (!c0 && !c1) {
-        showToast(materializr::tr("Neither sketch is a closed shape - the profile has to be a "
-                                  "closed loop such as a circle."), 6.0);
-        return;
-    }
-    m_sweepProfileSketch = profile;
-    m_sweepPathSketch = path;
-    m_sweepPerpendicular = true;
-    m_sweepFailure.clear();
-    m_sweepPreview.clear(*m_document);
-    m_sweepActive = true;
-    updateSweep();
-}
-
-void Application::updateSweep() {
-    if (!m_sweepActive || !m_history || !m_document) return;
-    auto trackBodies = trackBodyChanges(); // marks what this edit changed
-    // Retract the applied preview so the new parameters land on a clean document.
-    m_sweepPreview.retract(*m_document);
-    auto* held = dynamic_cast<SweepOp*>(m_sweepPreview.op());
-    if (!held) {
-        m_sweepPreview.hold(std::make_unique<SweepOp>(), *m_document);
-        held = static_cast<SweepOp*>(m_sweepPreview.op());
-    }
-    held->setSketchSources(m_sweepProfileSketch, m_sweepPathSketch);
-    held->setKeepPerpendicular(m_sweepPerpendicular);
-    if (!held->rebuildFromSketches(*m_document)) {
-        m_sweepFailure = materializr::tr("The first sketch has to be a closed shape and the "
-                                         "second an open curve (or another closed shape).");
-        return;
-    }
-    if (m_sweepPreview.apply(*m_document)) m_sweepFailure.clear();
-    else m_sweepFailure = held->lastFailure();
-}
-
-void Application::commitSweep() {
-    auto trackBodies = trackBodyChanges(); // marks what this edit changed
-    m_sweepPreview.commit(*m_history, *m_document);
-    m_sweepActive = false;
-    markDirty();
-}
-
-void Application::cancelSweep() {
-    auto trackBodies = trackBodyChanges();
-    m_sweepPreview.clear(*m_document);
-    m_sweepActive = false;
-    m_sweepFailure.clear();
 }
 
 // ─── Cascade: re-execute Extrudes that consumed a just-edited sketch ───────
@@ -1276,10 +1115,32 @@ const std::map<int, std::set<int>>& Application::sketchBodyLinks() const {
     // + captureDiff per step, fresh map/set nodes) was running per frame.
     if (m_history && m_linkMapRevision == m_history->revision())
         return m_linkMapCache;
-    if (!m_history) { m_linkMapCache.clear(); return m_linkMapCache; }
+    std::map<int, std::set<int>>& links = m_linkMapCache;
+    links.clear();
+    if (!m_history) return links;
     m_linkMapRevision = m_history->revision();
-    m_linkMapCache = materializr::computeSketchBodyLinks(*m_history);
-    return m_linkMapCache;
+    int n = m_history->stepCount();
+    for (int i = 0; i < n; ++i) {
+        const Operation* op = m_history->getStep(i);
+        if (!op) continue;
+        std::set<int> srcSketches;
+        if (auto* ext = dynamic_cast<const ExtrudeOp*>(op)) {
+            if (ext->getSketchId() >= 0) srcSketches.insert(ext->getSketchId());
+        } else if (auto* pp = dynamic_cast<const PushPullOp*>(op)) {
+            for (int t = 0; t < pp->targetCount(); ++t)
+                if (pp->getSketchIdAt(t) >= 0) srcSketches.insert(pp->getSketchIdAt(t));
+        } else if (auto* rv = dynamic_cast<const RevolveOp*>(op)) {
+            if (rv->getSketchId() >= 0) srcSketches.insert(rv->getSketchId());
+        }
+        if (srcSketches.empty()) continue;
+        // Bodies this step touched = created + modified.
+        OperationDiff diff = op->captureDiff();
+        std::set<int> bodies(diff.created.begin(), diff.created.end());
+        for (const auto& [id, _] : diff.modifiedBefore) bodies.insert(id);
+        for (int s : srcSketches)
+            links[s].insert(bodies.begin(), bodies.end());
+    }
+    return links;
 }
 
 bool Application::bodySafelyRederivable(int bodyId, int viaSketchId) const {
@@ -1370,49 +1231,7 @@ std::string Application::linkHintFor(bool isBody, int id) const {
            materializr::tr(" - editing this sketch updates it.");
 }
 
-// A completed cascade (nothing deferred, nothing rolled back for being over budget)
-// means the model now matches the active sketch as it stands.
-bool Application::cascadeFromSketchEdit(int sketchId, double budgetMs, bool resync) {
-    const bool done = cascadeFromSketchEditImpl(sketchId, budgetMs, resync);
-    if (done && m_inSketchMode && m_activeSketch && sketchId == m_activeSketchId)
-        markSketchSynced();
-    return done;
-}
-
-// Dragging every line of Sketch 1 to a new place rebuilds the body there, but a
-// sketch drawn on that body (Sketch 2, with a pocket cut from it) used to stay
-// put: its features then missed, failed to follow and were switched off. When the
-// step just recorded was a rigid move of the whole sketch, the sketches on its
-// body take the same motion, stored on the step itself so Undo / Redo and any
-// replay carry them with it. Anything else (a resize, one dragged point, a new
-// line) leaves them alone - there is no obvious place for them to go.
-void Application::carryHostedSketchesWithEdit(int sketchId) {
-    if (sketchId < 0 || !m_history || !m_document) return;
-    const int top = m_history->currentStep();
-    if (top < 0) return;
-    auto* se = dynamic_cast<SketchEditOp*>(const_cast<Operation*>(m_history->getStep(top)));
-    if (!se || se->followersAnalyzed()) return;
-    se->setFollowersAnalyzed(true);
-    if (materializr::sketchIdForCascade(se, *m_document) != sketchId) return;
-    auto sk = m_document->getSketch(sketchId);
-    if (!sk || sk->isDetachedFromBody()) return;
-    if (!se->getBeforeSnapshot() || !se->getAfterSnapshot()) return;
-    gp_Trsf world;
-    if (!materializr::sketchRigidMotion(*se->getBeforeSnapshot(), *se->getAfterSnapshot(), world))
-        return;
-    for (int f : materializr::hostedFollowerSketches(sketchBodyLinks(), *m_history,
-                                                     *m_document, sketchId)) {
-        auto fs = m_document->getSketch(f);
-        if (!fs) continue;
-        gp_Pln moved = fs->getPlane();
-        moved.Transform(world);
-        se->addFollowerMove(f, fs->getPlane(), moved);
-        fs->setPlane(moved);
-    }
-    if (!se->followerMoves().empty()) markDirty();
-}
-
-bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool resync) {
+bool Application::cascadeFromSketchEdit(int sketchId, double budgetMs) {
     if (sketchId < 0 || !m_history || !m_document) return true;
     // A detached sketch has been deliberately broken out of unison with its
     // body (moved on its own in 3D) - editing it must NOT retro-drive the body.
@@ -1427,40 +1246,13 @@ bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool 
     // chain from the earliest affected step below. Steps above the undo tip are
     // excluded (see rederiveSketchDrivenOps): replaying "from" one would roll
     // the tip forward through everything just undone.
-    //
-    // Steps an earlier cascade switched off (it couldn't follow a sketch edit)
-    // get another chance first: the edit that broke them may since have been
-    // undone or corrected. They ride along as "reviving" - enabled but not
-    // applied yet - and go back to suspended if they still can't follow.
-    //
-    // Sketches drawn on a body this sketch drives ride in the same replay: they
-    // travel with it when it is moved (SketchTransformOp followers), so the
-    // features built from THEM have to re-read their sketches too - replaying
-    // them with the profile of the old position cut the wrong place, failed,
-    // and got switched off (issue #185). Rebuilding a profile from an untouched
-    // sketch is a no-op, so an ordinary edit of the host sketch pays nothing.
-    std::vector<int> group{sketchId};
-    for (int f : materializr::hostedFollowerSketches(sketchBodyLinks(), *m_history, *m_document, sketchId))
-        group.push_back(f);
-    std::vector<int> reviving;
-    for (int sid : group)
-        for (int i : materializr::reviveSuspendedFor(*m_history, sid)) reviving.push_back(i);
-    std::sort(reviving.begin(), reviving.end());
-    reviving.erase(std::unique(reviving.begin(), reviving.end()), reviving.end());
     int matched = 0;
-    int earliest = -1;
-    for (int sid : group) {
-        int m = 0;
-        const int e = materializr::rederiveSketchDrivenOps(*m_history, *m_document, sid, &m);
-        matched += m;
-        if (e >= 0 && (earliest < 0 || e < earliest)) earliest = e;
-    }
-    if (!reviving.empty() && (earliest < 0 || reviving.front() < earliest))
-        earliest = reviving.front();
+    const int earliest =
+        materializr::rederiveSketchDrivenOps(*m_history, *m_document, sketchId, &matched);
     if (earliest < 0) {
         std::fprintf(stderr, "[Cascade] sketchId=%d: %d matched, none re-derivable\n",
                      sketchId, matched);
-        if (matched > 0 && !resync) {
+        if (matched > 0) {
             // A body IS driven by this sketch, but its profile couldn't be
             // re-derived from the new geometry - tell the user instead of
             // silently leaving the sketch changed and the body stale.
@@ -1494,10 +1286,9 @@ bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool 
     // from the final one. A fillet/chamfer re-finding its edges from "the
     // sketch the user just edited" (generative anchors) must read the final
     // state or it looks for the old geometry and fails every time.
-    for (int sid : group)
-        if (auto sk = m_document->getSketch(sid))
-            m_document->setCascadeSketchOverride(
-                sid, std::make_shared<materializr::Sketch>(*sk));
+    if (auto sk = m_document->getSketch(sketchId))
+        m_document->setCascadeSketchOverride(
+            sketchId, std::make_shared<materializr::Sketch>(*sk));
 
     // In-sketch budget: History checks it between replayed steps, and the ops
     // that run long booleans (push/pull, lathe) poll it from inside the kernel
@@ -1527,7 +1318,6 @@ bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool 
     if (!ok && m_history->lastEditAborted()) {
         endBudget();
         m_document->clearCascadeSketchOverrides();
-        materializr::settleRevived(*m_history, reviving, false);
         std::fprintf(stderr, "[Cascade] sketchId=%d replay from step %d: over the %.0f ms "
                      "budget - deferred to sketch Finish\n", sketchId, earliest, budgetMs);
         // Rolled back: no body changed, nothing to remesh.
@@ -1539,31 +1329,18 @@ bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool 
     // and tell the user exactly which feature to re-apply (#53). Bounded -
     // if several steps fail we stop rather than gut the history.
     std::vector<int> disabledSteps;
-    while (!ok && !resync && m_history->lastEditFailStep() >= 0 &&
+    while (!ok && m_history->lastEditFailStep() >= 0 &&
            disabledSteps.size() < 8) {
         const int bad = m_history->lastEditFailStep();
-        Operation* op = const_cast<Operation*>(m_history->getStep(bad));
+        const Operation* op = m_history->getStep(bad);
         if (!op) break;
-        if (op->isReviving()) {
-            // A retry that still can't follow: it was never applied, so just
-            // put it back to suspended - quietly, the user was told already.
-            std::fprintf(stderr, "[Cascade] step %d (%s) still can't follow; staying "
-                         "suspended\n", bad, op->name().c_str());
-            op->setReviving(false);
-            op->setEnabled(false);
-        } else {
-            std::fprintf(stderr, "[Cascade] disabling step %d (%s) and retrying\n",
-                         bad, op->name().c_str());
-            m_history->setStepEnabled(bad, false, *m_document);
-            op->setCascadeSuspended(true);
-            disabledSteps.push_back(bad);
-        }
+        std::fprintf(stderr, "[Cascade] disabling step %d (%s) and retrying\n",
+                     bad, op->name().c_str());
+        m_history->setStepEnabled(bad, false, *m_document);
+        disabledSteps.push_back(bad);
         ok = m_history->editStep(earliest, *m_document, /*transactional=*/true);
     }
     endBudget();
-    // Before the restore below: the steps still reviving were never applied,
-    // so they must be off again before anything is re-enabled and replayed.
-    const int revivedCount = materializr::settleRevived(*m_history, reviving, ok);
     if (!ok && !disabledSteps.empty()) {
         // Still failing - restore what we disabled and fall back to a clean
         // full revert (never leave the history silently gutted).
@@ -1574,9 +1351,7 @@ bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool 
     m_document->clearCascadeSketchOverrides();
     std::fprintf(stderr, "[Cascade] sketchId=%d replay from step %d: %s\n",
                  sketchId, earliest, ok ? "applied" : "reverted");
-    if (resync) {
-        // Silent: the caller compares the bodies and reports.
-    } else if (!ok) {
+    if (!ok) {
         const Operation* culprit = m_history->lastEditFailStep() >= 0
             ? m_history->getStep(m_history->lastEditFailStep()) : nullptr;
         showToast(culprit
@@ -1587,9 +1362,6 @@ bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool 
             : std::string(materializr::tr("Couldn't update the model for that sketch change - a "
                                           "downstream feature couldn't follow it, so "
                                           "the model was left unchanged.")));
-    } else if (revivedCount > 0 && disabledSteps.empty()) {
-        showToast(materializr::tr("Restored the features an earlier sketch change had "
-                                  "switched off."), 6.0);
     } else if (!disabledSteps.empty()) {
         std::string names;
         for (size_t i = 0; i < disabledSteps.size(); ++i) {
@@ -1620,50 +1392,6 @@ bool Application::cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool 
     m_lastCascadeMs = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - cascadeStart).count();
     return true;
-}
-
-void Application::resyncModelToSketches(bool manual) {
-    if (!m_document || !m_history) return;
-    std::vector<int> sketches;
-    for (const auto& [sid, bodies] : sketchBodyLinks())
-        if (!bodies.empty() && m_document->getSketch(sid)) sketches.push_back(sid);
-    if (sketches.empty()) {
-        if (manual)
-            showToast(materializr::tr("No feature is built from a sketch, so there is nothing to update."), 4.0);
-        return;
-    }
-    Document* doc = m_document;
-    m_deferredHeavy.queue([this, doc, sketches = std::move(sketches), manual]() {
-        if (doc != m_document) return;   // the user moved to another tab first
-        renderProgressFrame(-1.0f, materializr::tr("Updating the model..."));
-        auto volumeOf = [](const TopoDS_Shape& s) {
-            try { GProp_GProps g; BRepGProp::VolumeProperties(s, g); return g.Mass(); }
-            catch (...) { return 0.0; }
-        };
-        std::map<int, double> before;
-        for (int id : m_document->getAllBodyIds()) before[id] = volumeOf(m_document->getBody(id));
-        for (int sid : sketches)
-            if (m_document->getSketch(sid)) cascadeFromSketchEdit(sid, -1.0, /*resync=*/true);
-        // A replay hands every body a fresh shape, so shapes cannot say whether
-        // anything changed; volumes can.
-        int changed = 0;
-        std::set<int> now;
-        for (int id : m_document->getAllBodyIds()) {
-            now.insert(id);
-            auto it = before.find(id);
-            if (it == before.end()) { ++changed; continue; }
-            const double v = volumeOf(m_document->getBody(id));
-            if (std::abs(v - it->second) > 1e-6 * std::max(1.0, std::abs(it->second))) ++changed;
-        }
-        for (const auto& [id, v] : before) if (!now.count(id)) ++changed;
-        if (changed > 0) {
-            markDirty();
-            showToast(materializr::trFormat("Updated %d body(ies) to match their sketches - this "
-                                            "project was saved while they were out of step.", changed), 9.0);
-        } else if (manual) {
-            showToast(materializr::tr("The model already matches its sketches."), 4.0);
-        }
-    });
 }
 
 void Application::cancelLoft() {
@@ -1946,7 +1674,6 @@ void Application::beginConstructionPlane() {
     m_planeOpHaveTwoPlanes = false;
     m_planeOpHaveAxis = false;
     m_planeOpHaveCylinder = false;
-    m_planeOpHavePoint = false;
     {
         std::vector<gp_Pln> planarPlanes;        // planar faces + construction planes
         std::vector<gp_Ax1> axes;                // construction axes + straight edges
@@ -1990,10 +1717,6 @@ void Application::beginConstructionPlane() {
             }
         }
 
-        if (!vertices.empty()) {
-            m_planeOpHavePoint = true;
-            m_planeOpPoint = vertices[0];
-        }
         if (planarPlanes.size() >= 2) {
             m_planeOpHaveTwoPlanes = true;
             m_planeOpPlaneA = planarPlanes[0];
@@ -2358,25 +2081,6 @@ void Application::commitPrimitivePopup() {
             e.bodyId = ids.back();
             m_selection->select(e);
         }
-        // Bring the new solid into frame. Left where it was, a primitive is
-        // routinely far too big or too small for the current view and the user
-        // has to rescale by hand every time. Everything visible is fitted (so
-        // adding a part next to others keeps them all in view); the viewing
-        // direction is kept, only the distance and centre change.
-        Bnd_Box all;
-        for (int id : m_document->getAllBodyIds()) {
-            if (!m_document->isBodyVisible(id)) continue;
-            try { BRepBndLib::Add(m_document->getBody(id), all); } catch (...) {}
-        }
-        if (!all.IsVoid() && m_viewport) {
-            double x0, y0, z0, x1, y1, z1;
-            all.Get(x0, y0, z0, x1, y1, z1);
-            // Glide there rather than cut: a primitive can change the framing
-            // completely and the jump loses where everything went.
-            m_viewport->getCamera().animateToFit(
-                glm::vec3(static_cast<float>(x0), static_cast<float>(y0), static_cast<float>(z0)),
-                glm::vec3(static_cast<float>(x1), static_cast<float>(y1), static_cast<float>(z1)));
-        }
     }
     m_primitivePopupActive = false;
 }
@@ -2738,7 +2442,6 @@ void Application::beginSketchPattern(PatternKind kind) {
     m_sketchPatternLines.clear();
     m_sketchPatternCircles.clear();
     m_sketchPatternArcs.clear();
-    m_sketchPatternSplines.clear();
     m_sketchPatternSelectAll = !m_sketchTool->hasElementSelection();
     if (!m_sketchPatternSelectAll) {
         m_sketchPatternPts.insert(m_sketchTool->getSelectedPoints().begin(),
@@ -2773,15 +2476,6 @@ void Application::beginSketchPattern(PatternKind kind) {
                 }
             }
         }
-        m_sketchPatternSplines = m_sketchTool->getSelectedSplines();
-        for (int sid : m_sketchPatternSplines) {
-            for (const auto& sp : m_activeSketch->getSplines()) {
-                if (sp.id == sid) {
-                    for (int cp : sp.controlPointIds) m_sketchPatternPts.insert(cp);
-                    break;
-                }
-            }
-        }
     } else {
         for (const auto& p : m_activeSketch->getPoints()) m_sketchPatternPts.insert(p.id);
         for (const auto& l : m_activeSketch->getLines())  m_sketchPatternLines.insert(l.id);
@@ -2794,10 +2488,6 @@ void Application::beginSketchPattern(PatternKind kind) {
             m_sketchPatternPts.insert(a.startPointId);
             m_sketchPatternPts.insert(a.endPointId);
             m_sketchPatternArcs.insert(a.id);
-        }
-        for (const auto& sp : m_activeSketch->getSplines()) {
-            for (int cp : sp.controlPointIds) m_sketchPatternPts.insert(cp);
-            m_sketchPatternSplines.insert(sp.id);
         }
     }
 
@@ -2897,11 +2587,6 @@ void Application::updateSketchPattern() {
     for (const auto& l : m_activeSketch->getLines())
         lineKeys.insert(std::minmax(l.startPointId, l.endPointId));
 
-    // The polygons the pattern carries whole (read once: *m_activeSketch grows as
-    // copies are added, but only the originals are repeated).
-    const std::vector<materializr::SketchPolygon> patternPolygons =
-        m_activeSketch->polygonsMadeOf(m_sketchPatternLines);
-
     for (int step = 1; step < steps; ++step) {
         std::unordered_map<int,int> remap;
         auto xform = [&](glm::vec2 p) -> glm::vec2 {
@@ -2962,7 +2647,6 @@ void Application::updateSketchPattern() {
                     // addLine, which can reallocate the vector `l` lives in.
                     const bool cons = l.isConstruction;
                     const int nl = m_activeSketch->addLine(sIt->second, eIt->second);
-                    m_activeSketch->setElementOrigin(nl, lid);
                     if (cons) m_activeSketch->setElementConstruction(nl, true);
                 }
                 break;
@@ -2974,7 +2658,6 @@ void Application::updateSketchPattern() {
             auto it = remap.find(c.centerPointId);
             if (it != remap.end()) {
                 const int nc = m_activeSketch->addCircle(it->second, c.radius);
-                m_activeSketch->setElementOrigin(nc, c.id);
                 if (c.isConstruction) m_activeSketch->setElementConstruction(nc, true);
             }
         }
@@ -2986,39 +2669,9 @@ void Application::updateSketchPattern() {
             auto ie = remap.find(a.endPointId);
             if (ic != remap.end() && is != remap.end() && ie != remap.end()) {
                 const int na = m_activeSketch->addArc(ic->second, is->second, ie->second, a.radius);
-                m_activeSketch->setElementOrigin(na, a.id);
                 if (a.isConstruction) m_activeSketch->setElementConstruction(na, true);
             }
         }
-        // Splines: the copy's control points are the remapped ones. (They were
-        // left out, so a patterned spline vanished from the copies - #182.)
-        auto splines = m_activeSketch->getSplines();
-        for (const auto& sp : splines) {
-            if (!m_sketchPatternSplines.count(sp.id)) continue;
-            std::vector<int> cps;
-            for (int cp : sp.controlPointIds) {
-                auto it = remap.find(cp);
-                if (it != remap.end()) cps.push_back(it->second);
-            }
-            if (cps.size() < 2 || cps.size() != sp.controlPointIds.size()) continue;
-            const int ns = m_activeSketch->addSpline(cps);
-            m_activeSketch->setElementOrigin(ns, sp.id);
-            if (sp.isConstruction) m_activeSketch->setElementConstruction(ns, true);
-        }
-        // Polygons: each copy of a whole polygon is a polygon again (not just its
-        // edges), over the same remapped / welded vertices. The centre point is not
-        // always part of the pattern, so it is placed by the same transform.
-        m_activeSketch->copyPolygonRecords(patternPolygons, [&](int oldId) -> int {
-            auto it = remap.find(oldId);
-            if (it != remap.end()) return it->second;
-            const auto* p = m_activeSketch->getPoint(oldId);
-            if (!p) return -1;
-            const glm::vec2 np = xform(p->pos);
-            const int nid = m_activeSketch->addPoint(np);
-            pointGrid[cellOf(np, 0, 0)].push_back(nid);
-            remap[oldId] = nid;
-            return nid;
-        });
     }
 }
 
@@ -3034,9 +2687,6 @@ void Application::commitSketchPattern() {
         auto op = std::make_unique<SketchEditOp>(m_activeSketch,
                                                   m_sketchPatternBefore, after);
         m_history->pushExecuted(std::move(op), *m_document);
-        // The pattern's new contours belong to whatever was built from this sketch.
-        // (It used to push the step and stop here: the body kept its old shape.)
-        if (m_activeSketchId >= 0) requestSketchCascade(m_activeSketchId);
     }
     m_sketchPatternActive = false;
     m_sketchPatternPickingOrigin = false;
@@ -3045,7 +2695,6 @@ void Application::commitSketchPattern() {
     m_sketchPatternLines.clear();
     m_sketchPatternCircles.clear();
     m_sketchPatternArcs.clear();
-    m_sketchPatternSplines.clear();
 }
 
 void Application::cancelSketchPattern() {
@@ -3059,7 +2708,6 @@ void Application::cancelSketchPattern() {
     m_sketchPatternLines.clear();
     m_sketchPatternCircles.clear();
     m_sketchPatternArcs.clear();
-    m_sketchPatternSplines.clear();
 }
 
 // ── Rotate Plane About Axis ─────────────────────────────────────────────

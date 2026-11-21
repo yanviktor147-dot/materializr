@@ -58,10 +58,6 @@ void ExtrudeOp::setProfile(const TopoDS_Shape& wire) {
 // Sketch::buildProfileShape) so the cascade reproduces the original shape.
 
 #include <BRepClass_FaceClassifier.hxx>
-#include <BRepAdaptor_Curve.hxx>
-#include <BRepExtrema_DistShapeShape.hxx>
-#include <BRepBuilderAPI_MakeVertex.hxx>
-#include <TopoDS_Wire.hxx>
 #include <BRepTools.hxx>
 #include <gp_Pln.hxx>
 #include <ElSLib.hxx>
@@ -95,21 +91,6 @@ int pointsInsideFace(const TopoDS_Face& face, std::vector<gp_Pnt>& out,
                 gp_Pnt p = surf->Value(u, v);
                 BRepClass_FaceClassifier cls(face, p, 1e-6);
                 if (cls.State() == TopAbs_IN) { out.push_back(p); ++added; }
-            }
-        }
-        // A thin frame - a ring a couple of millimetres wide round a large hole - can
-        // have every one of those 25 samples fall in the hole. A face with no points
-        // can not be recorded, and an extrude loaded from a file then replays from its
-        // frozen footprint and stops following its sketch (#185). Look finer.
-        if (added == 0) {
-            constexpr int N = 40;
-            for (int i = 1; i < N && added < maxPts; ++i) {
-                for (int j = 1; j < N && added < maxPts; ++j) {
-                    double u = u0 + (u1 - u0) * i / N, v = v0 + (v1 - v0) * j / N;
-                    gp_Pnt p = surf->Value(u, v);
-                    BRepClass_FaceClassifier cls(face, p, 1e-6);
-                    if (cls.State() == TopAbs_IN) { out.push_back(p); ++added; }
-                }
             }
         }
     } catch (...) {}
@@ -183,109 +164,15 @@ std::vector<std::pair<double,double>> footprintPoints(
     }
     return pts;
 }
-
-// True when part of `old`'s outer boundary still runs along `now`'s boundary.
-// That is what a MERGE looks like (a dividing line was deleted: the region keeps
-// its other sides and swallows its neighbour). A RESIZE replaces the whole
-// boundary (a hole going from 8 to 10 mm leaves no part of the old circle), so
-// there nothing is shared and the sketch's face is the answer.
-bool sharesBoundary(const TopoDS_Face& old, const TopoDS_Face& now) {
-    try {
-        const TopoDS_Wire ow = BRepTools::OuterWire(old);
-        const TopoDS_Wire nw = BRepTools::OuterWire(now);
-        if (ow.IsNull() || nw.IsNull()) return false;
-        int total = 0, onNew = 0;
-        for (TopExp_Explorer ex(ow, TopAbs_EDGE); ex.More(); ex.Next()) {
-            BRepAdaptor_Curve c(TopoDS::Edge(ex.Current()));
-            for (int i = 0; i <= 8; ++i) {
-                gp_Pnt p = c.Value(c.FirstParameter() + (c.LastParameter() - c.FirstParameter()) * (i / 8.0));
-                BRepExtrema_DistShapeShape d(BRepBuilderAPI_MakeVertex(p).Vertex(), nw);
-                ++total;
-                if (d.IsDone() && d.Value() < 1e-3) ++onNew;
-            }
-        }
-        return total > 0 && onNew >= std::max(2, total / 8);
-    } catch (...) {
-        return true;   // can't tell: keep the old, conservative behaviour
-    }
-}
 } // namespace
 
-bool ExtrudeOp::rebuildProfileFromSketch(Document& doc, bool adoptNewRegions, bool isLatest) {
+bool ExtrudeOp::rebuildProfileFromSketch(Document& doc) {
     if (m_sketchId < 0) return false;
     auto sk = doc.getSketch(m_sketchId);
     if (!sk) return false;
 
     TopoDS_Shape profile = sk->buildProfileShape();
     if (profile.IsNull()) return false;
-
-    // Contours drawn since this extrude was made are part of the feature now: it
-    // sweeps every region that held one of its recorded points PLUS every region
-    // holding none of the points recorded at the start. Worked out per REGION,
-    // not per profile island: a circle added around the extruded one leaves the
-    // original a hole in the sketch's even-odd profile, but the disc is still the
-    // region that was extruded.
-    //
-    // Which of those it takes depends on what it was applied to (SketchScope.h):
-    // a Whole-scoped feature takes all of them, but only when it is the sketch's
-    // latest feature (several taking the same contour would build it several
-    // times); a Contours-scoped one takes only the ones that are COPIES of the
-    // contours it used - a circle drawn separately is none of its business.
-    const bool contoursScope = m_scope == SketchScope::Contours;
-    if (adoptNewRegions && (contoursScope || isLatest) && !m_regionPts.empty() &&
-        !m_knownPts.empty() && (!contoursScope || !m_usedSigs.empty())) {
-        std::vector<glm::vec2> known;
-        known.reserve(m_knownPts.size());
-        for (const auto& p : m_knownPts)
-            known.emplace_back(static_cast<float>(p.first), static_cast<float>(p.second));
-        // Regions of what was DRAWN, never of the face the sketch sits on. A
-        // sketch started on a body face also carries that face's own outline
-        // and holes as region boundaries, and they move with the body: once the
-        // extrude had cut a hole through the face, the face carried that hole,
-        // so a drawn circle later made bigger was split into a ring around the
-        // OLD hole. The ring plus the face's leftover were "contours drawn since"
-        // and the cut left the old hole's disc standing - a pancake in the middle
-        // of the enlarged hole, and the new circles ignored (1.8.0-beta.5 tester
-        // list). The normal path below already works from the drawn profile only.
-        materializr::Sketch drawnOnly(*sk);
-        drawnOnly.setSourceFace(TopoDS_Face());
-        const auto regions = drawnOnly.buildRegions();
-        std::vector<int> fresh = drawnOnly.regionsMissingFrom(regions, known);
-        if (contoursScope && !fresh.empty()) {
-            fresh.erase(std::remove_if(fresh.begin(), fresh.end(), [&](int idx) {
-                const std::vector<int> sig = drawnOnly.faceRootSignature(regions[idx].face);
-                return sig.empty() ||
-                       std::find(m_usedSigs.begin(), m_usedSigs.end(), sig) == m_usedSigs.end();
-            }), fresh.end());
-        }
-        if (!fresh.empty()) {
-            BRep_Builder bb;
-            TopoDS_Compound all;
-            bb.MakeCompound(all);
-            int usedRegions = 0, taken = 0;
-            for (int idx : drawnOnly.drawnRegions(regions)) {
-                if (regions[idx].face.IsNull()) continue;
-                bool wanted = std::find(fresh.begin(), fresh.end(), idx) != fresh.end();
-                bool used = false;
-                for (const auto& p : m_regionPts)
-                    if (drawnOnly.isPointInRegion(regions[idx],
-                                            glm::vec2(static_cast<float>(p.first),
-                                                      static_cast<float>(p.second)))) {
-                        used = true;
-                        break;
-                    }
-                if (used) ++usedRegions;
-                if (used || wanted) { bb.Add(all, regions[idx].face); ++taken; }
-            }
-            if (usedRegions > 0 && taken > 0) {
-                std::fprintf(stderr, "[Extrude] adopted %zu contour(s) drawn since the "
-                             "extrude\n", fresh.size());
-                m_profile = taken == 1 ? TopoDS_Shape(TopExp_Explorer(all, TopAbs_FACE).Current())
-                                       : unifyProfile(all);
-                return true;
-            }
-        }
-    }
 
     // Select only the regions this extrude ORIGINALLY used (#53). Without
     // recorded points, keep the whole profile (old behaviour / old files
@@ -301,85 +188,48 @@ bool ExtrudeOp::rebuildProfileFromSketch(Document& doc, bool adoptNewRegions, bo
         // just the surviving fragments would silently shrink the body, so the
         // historically-exact recovered profile wins instead (below).
         std::vector<bool> hit(m_regionPts.size(), false);
-        std::vector<std::vector<size_t>> faceHits;   // per KEPT face: recorded points inside it
-        std::vector<TopoDS_Face> keptFaces;
         for (TopExp_Explorer fx(profile, TopAbs_FACE); fx.More(); fx.Next()) {
             const TopoDS_Face& f = TopoDS::Face(fx.Current());
-            std::vector<size_t> mineIdx;
+            bool mine = false;
             for (size_t pi = 0; pi < m_regionPts.size(); ++pi) {
                 gp_Pnt p = ElSLib::Value(m_regionPts[pi].first,
                                          m_regionPts[pi].second, pln);
                 BRepClass_FaceClassifier cls(f, p, 1e-4);
-                if (cls.State() == TopAbs_IN) { mineIdx.push_back(pi); hit[pi] = true; }
+                if (cls.State() == TopAbs_IN) { mine = true; hit[pi] = true; }
             }
-            if (!mineIdx.empty()) {
-                bb.Add(keep, f); ++kept;
-                keptFaces.push_back(f);
-                faceHits.push_back(std::move(mineIdx));
-            }
+            if (mine) { bb.Add(keep, f); ++kept; }
         }
         size_t matched = 0;
         for (bool h : hit) if (h) ++matched;
-        // Area sanity: if a region's boundary lines were later deleted, its
-        // area gets absorbed into a bigger region - its recorded points still
-        // match, but the selected face is far larger than what was extruded.
-        // Judged PER FACE against the saved footprint faces that share its
-        // recorded points, and only where the footprint covers it: a cut
-        // through a curved body leaves a footprint on the sketch plane for
-        // only SOME of its regions (a ring of holes through a dome: just the
-        // one on the flat top), so comparing the whole selection to the
-        // footprint's total made every other hole look like ballooning and
-        // swapped them all out for the one.
-        if (kept > 0 && !m_recoveredProfile.IsNull()) {
+        // Area sanity: if the ORIGINAL region's boundary lines were later
+        // deleted, its area gets absorbed into a bigger region - every point
+        // still matches, but the selected region is far larger than what was
+        // extruded. Compare areas against the saved footprint and prefer it
+        // when the match balloons.
+        if (kept > 0 && matched == m_regionPts.size() &&
+            !m_recoveredProfile.IsNull()) {
             auto areaOf = [](const TopoDS_Shape& s) {
                 GProp_GProps g;
                 BRepGProp::SurfaceProperties(s, g);
                 return g.Mass();
             };
-            for (size_t k = 0; k < keptFaces.size(); ++k) {
-                double aOrig = 0.0;
-                std::vector<TopoDS_Face> sharedFaces;
-                for (TopExp_Explorer ox(m_recoveredProfile, TopAbs_FACE); ox.More(); ox.Next()) {
-                    const TopoDS_Face& of = TopoDS::Face(ox.Current());
-                    bool shares = false;
-                    for (size_t pi : faceHits[k]) {
-                        gp_Pnt p = ElSLib::Value(m_regionPts[pi].first,
-                                                 m_regionPts[pi].second, pln);
-                        BRepClass_FaceClassifier cls(of, p, 1e-4);
-                        if (cls.State() == TopAbs_IN) { shares = true; break; }
-                    }
-                    if (shares) { aOrig += areaOf(of); sharedFaces.push_back(of); }
-                }
-                const double aNow = areaOf(keptFaces[k]);
-                // A bigger face only counts as ballooning when it still shares
-                // part of the old boundary (see sharesBoundary): a hole resized
-                // from 8 to 10 mm is 1.56x the area and must be FOLLOWED.
-                bool merged = false;
-                if (aOrig > 1e-9 && aNow > aOrig * 1.5)
-                    for (const auto& of : sharedFaces)
-                        if (sharesBoundary(of, keptFaces[k])) { merged = true; break; }
-                if (merged) {
-                    std::fprintf(stderr, "[Extrude] matched region area %.0f far "
-                                 "exceeds the original footprint %.0f - using the "
-                                 "saved footprint profile\n", aNow, aOrig);
-                    m_profile = m_recoveredProfile;
-                    return true;
-                }
+            double aKeep = areaOf(keep), aOrig = areaOf(m_recoveredProfile);
+            if (aOrig > 1e-9 && aKeep > aOrig * 1.5) {
+                std::fprintf(stderr, "[Extrude] matched region area %.0f far "
+                             "exceeds the original footprint %.0f - using the "
+                             "saved footprint profile\n", aKeep, aOrig);
+                m_profile = m_recoveredProfile;
+                return true;
             }
         }
-        // A PARTIAL match (some recorded points no longer inside any face) is
-        // followed, not refused: the surviving faces ARE the sketch's answer.
-        // This used to fall back to the saved footprint, but the recorded
-        // points are a grid sampled over the original regions - shrink a hole
-        // from 8 mm to 6 mm and the samples between the two radii no longer
-        // land anywhere, so the cut kept its OLD 8 mm hole while the sketch
-        // showed 6 (and deleting one of several holes likewise left it
-        // standing). Only when NOTHING matches (the region moved away or was
-        // deleted wholesale, below) does the footprint stand in.
-        if (kept > 0 && matched < m_regionPts.size())
-            std::fprintf(stderr, "[Extrude] %zu/%zu recorded region points "
-                         "still inside the sketch - following its current "
-                         "regions\n", matched, m_regionPts.size());
+        if (kept > 0 && matched < m_regionPts.size() &&
+            !m_recoveredProfile.IsNull()) {
+            std::fprintf(stderr, "[Extrude] only %zu/%zu recorded region "
+                         "points found - using the saved footprint profile\n",
+                         matched, m_regionPts.size());
+            m_profile = m_recoveredProfile;
+            return true;
+        }
         if (kept > 0) {
             m_profile = kept == 1 ? TopoDS_Shape(TopExp_Explorer(keep, TopAbs_FACE).Current())
                                   : TopoDS_Shape(keep);
@@ -521,34 +371,7 @@ bool ExtrudeOp::execute(Document& doc) {
                         }
                     }
                 }
-                if (!pts.empty()) {
-                    m_regionPts = std::move(pts);
-                    // ... and what else the sketch held, so a contour drawn
-                    // later can be told from one deliberately left out.
-                    m_knownPts.clear();
-                    if (auto sk = doc.getSketch(m_sketchId))
-                    {
-                        // Same drawn-only view the rebuild compares against.
-                        materializr::Sketch drawnOnly(*sk);
-                        drawnOnly.setSourceFace(TopoDS_Face());
-                        for (const glm::vec2& q : drawnOnly.drawnRegionSamples(drawnOnly.buildRegions()))
-                            m_knownPts.push_back({q.x, q.y});
-                    }
-                }
-            }
-        }
-
-        // A contour-scoped extrude remembers WHICH contours it used by what they
-        // are bounded by (see SketchScope.h), so copies of them can be told from
-        // everything else drawn in the sketch later.
-        if (m_sketchId >= 0 && m_scope == SketchScope::Contours && m_usedSigs.empty()) {
-            if (auto sk = doc.getSketch(m_sketchId)) {
-                for (TopExp_Explorer fx(m_profile, TopAbs_FACE); fx.More(); fx.Next()) {
-                    auto sig = sk->faceRootSignature(TopoDS::Face(fx.Current()));
-                    if (!sig.empty() &&
-                        std::find(m_usedSigs.begin(), m_usedSigs.end(), sig) == m_usedSigs.end())
-                        m_usedSigs.push_back(std::move(sig));
-                }
+                if (!pts.empty()) m_regionPts = std::move(pts);
             }
         }
 
@@ -809,19 +632,6 @@ std::string ExtrudeOp::serializeParams() const {
             blob += pb;
         }
     }
-    if (m_scope == SketchScope::Contours) {
-        blob += ";scope=1";
-        if (!m_usedSigs.empty()) blob += ";sigs=" + sketchSigsToString(m_usedSigs);
-    }
-    if (!m_knownPts.empty()) {
-        blob += ";known=";
-        char pb[64];
-        for (size_t i = 0; i < m_knownPts.size(); ++i) {
-            std::snprintf(pb, sizeof(pb), "%s%.4f:%.4f", i ? "," : "",
-                          m_knownPts[i].first, m_knownPts[i].second);
-            blob += pb;
-        }
-    }
     // The footprint a boolean-mode reload recovers with a full cut between the
     // step's before/after bodies. It only depends on saved data, so save the
     // OUTCOME and the next load skips the cut: the profile when it worked, an
@@ -902,24 +712,6 @@ bool ExtrudeOp::deserializeParams(const std::string& rawBlob) {
         else if (key == "mode")   { m_mode = static_cast<ExtrudeMode>(i); any = true; }
         else if (key == "target") { m_targetBodyId = i; any = true; }
         else if (key == "draft")  { m_draftAngle = d; any = true; }
-        else if (key == "scope")  { m_scope = i == 1 ? SketchScope::Contours : SketchScope::Whole; any = true; }
-        else if (key == "sigs")   { m_usedSigs = sketchSigsFromString(val); any = true; }
-        else if (key == "known") {
-            m_knownPts.clear();
-            size_t q = 0;
-            while (q < val.size() && m_knownPts.size() < 4096) {
-                size_t c = val.find(',', q);
-                std::string tokp = val.substr(q, c == std::string::npos
-                                                     ? std::string::npos : c - q);
-                size_t col = tokp.find(':');
-                if (col != std::string::npos)
-                    m_knownPts.push_back({std::atof(tokp.c_str()),
-                                          std::atof(tokp.c_str() + col + 1)});
-                if (c == std::string::npos) break;
-                q = c + 1;
-            }
-            any = true;
-        }
         else if (key == "regions") {
             m_regionPts.clear();
             size_t q = 0;

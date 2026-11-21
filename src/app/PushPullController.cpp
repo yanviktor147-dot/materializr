@@ -1,4 +1,3 @@
-#include <map>
 #include "ui/LengthField.h"
 #include "PushPullController.h"
 #include "PushPullPreview.h"
@@ -52,17 +51,6 @@ bool faceIsPlanar(const TopoDS_Face& face) {
     if (s->IsKind(STANDARD_TYPE(Geom_Plane))) return true;
     GeomLib_IsPlanarSurface tester(s, 1.0e-7);
     return tester.IsPlanar();
-}
-
-// The body a sketch is anchored to, or -1 when that body no longer exists. A
-// sketch outlives its host (delete the body, undo past it, restore an older edit
-// step): the stale id then sent the push down the fuse-into-existing path, which
-// failed doc.getBody() and skipped the target - Push did nothing at all
-// (1.8.0.b2_4). A sketch whose host is gone is free-floating.
-int liveHostBody(const Document& doc, int host) {
-    if (host < 0) return -1;
-    try { (void)doc.getBody(host); } catch (...) { return -1; }
-    return host;
 }
 
 // A body dense enough that a real boolean per drag frame is unaffordable.
@@ -144,7 +132,7 @@ int PushPullController::onBegin(const IopContext& ctx) {
             // behave like a free-floating sketch and make its own body.
             t.sourceBodyId = sketch->isDetachedFromBody()
                                  ? -1
-                                 : liveHostBody(ctx.doc, sketch->getSourceBody());
+                                 : sketch->getSourceBody();
             t.profile = regions[e.subShapeIndex].face;
             if (t.profile.IsNull()) continue;
             t.anchor = regions[e.subShapeIndex].representativePoint;
@@ -203,11 +191,10 @@ int PushPullController::onBegin(const IopContext& ctx) {
                 t.regionIndex = ri;
                 t.sourceBodyId = sketch->isDetachedFromBody()
                                      ? -1
-                                     : liveHostBody(ctx.doc, sketch->getSourceBody());
+                                     : sketch->getSourceBody();
                 t.profile = regions[ri].face;
                 t.anchor = regions[ri].representativePoint;
                 t.hasAnchor = true;
-                t.wholeSketch = true;
                 if (t.sourceBodyId < 0 && !sketch->isDetachedFromBody() &&
                     ctx.findBodyUnderRegion) {
                     int host = ctx.findBodyUnderRegion(t.profile,
@@ -224,21 +211,9 @@ int PushPullController::onBegin(const IopContext& ctx) {
         ctx.toast(materializr::tr("Push/Pull works on flat faces - not curved or "
                                   "fillet faces."));
     if (m_st.targets.empty()) {
-        if (!curvedFaceSkipped) {
+        if (!curvedFaceSkipped)
             std::fprintf(stderr,
                          "Push/Pull: select a sketch region or a body face first\n");
-            // Said, not swallowed: nothing on screen otherwise tells the user
-            // the tool did not start, or why.
-            bool sketchPicked = false;
-            for (const auto& e : ctx.selection.getSelection())
-                if (e.type == SelectionType::Sketch || e.type == SelectionType::SketchRegion)
-                    sketchPicked = true;
-            if (ctx.toast)
-                ctx.toast(sketchPicked
-                    ? materializr::tr("That sketch has no closed contour to push or pull - "
-                                      "close its open ends first.")
-                    : materializr::tr("Select a sketch region or a flat face to push/pull first."));
-        }
         return -1;
     }
 
@@ -397,13 +372,6 @@ std::unique_ptr<PushPullOp> PushPullController::makeOp() const {
         else
             op->setSketchSource(static_cast<int>(i), t.sketchId, t.regionIndex);
     }
-    // Whole sketch or picked contours, per sketch: one target taken from the
-    // sketch as a whole makes the sketch's feature a whole-sketch one.
-    std::map<int, bool> whole;
-    for (const auto& t : m_st.targets)
-        if (t.sketchId >= 0) whole[t.sketchId] = whole[t.sketchId] || t.wholeSketch;
-    for (const auto& [sid, w] : whole)
-        op->setSketchScope(sid, w ? SketchScope::Whole : SketchScope::Contours);
     return op;
 }
 
@@ -813,7 +781,7 @@ void PushPullController::renderPushPullPanel(const IopContext& ctx) {
     } else {
         // The member is the truth; the buffer follows it unless being typed in.
         materializr::reseedLengthBufferIfIdle("##ppdist", m_st.inputBuf, sizeof(m_st.inputBuf), m_st.distance);
-        if (materializr::lengthNumberText("##ppdist", m_st.inputBuf, sizeof(m_st.inputBuf),
+        if (materializr::inputNumberText("##ppdist", m_st.inputBuf, sizeof(m_st.inputBuf),
                              ImGuiInputTextFlags_EnterReturnsTrue)) {
             (void)materializr::parseLength(m_st.inputBuf, m_st.distance);
             m_st.distanceRaw = m_st.distance;
@@ -835,8 +803,10 @@ void PushPullController::renderPushPullPanel(const IopContext& ctx) {
 
     // Quick-nudge stepper (replaces the slider). Symmetric sweeps both ways, so
     // a negative distance is meaningless there - drop the minus buttons and
-    // clamp positive while ticked. 0 clears the change.
-    if (materializr::lengthStepperRow("ppStep", &m_st.distance,
+    // clamp positive while ticked. 0 clears the change. Desktop only -
+    // im-touch stays a single well.
+    if (!imTouch &&
+        materializr::lengthStepperRow("ppStep", &m_st.distance,
                                 /*allowNegative=*/!m_st.symmetric,
                                 m_st.symmetric ? 0.1f : -50.0f, 50.0f)) {
         m_st.distanceRaw = m_st.distance;

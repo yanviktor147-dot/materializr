@@ -1,7 +1,6 @@
 #include "SketchSolver.h"
 #include <cmath>
 #include <algorithm>
-#include <limits>
 
 namespace materializr {
 
@@ -25,41 +24,9 @@ const std::vector<Constraint>& SketchSolver::getConstraints() const {
     return m_sketch->getConstraints();
 }
 
-void SketchSolver::seedDistanceFromFirst(Sketch& sketch, const Constraint& c) {
-    if (c.type != ConstraintType::Distance || !(c.value > 0.0)) return;
-    const SketchPoint* pa = sketch.getPoint(c.entityA);
-    const SketchPoint* pb = sketch.getPoint(c.entityB);
-    if (!pa || !pb) return;
-    glm::vec2 diff = pb->pos - pa->pos;
-    const float len = glm::length(diff);
-    // Coincident points have no bearing of their own; use the one the
-    // dimension was placed along, as applyCorrection does.
-    glm::vec2 dir = len > 1e-6f ? diff / len
-                                : glm::vec2(static_cast<float>(c.orientX),
-                                            static_cast<float>(c.orientY));
-    if (glm::length(dir) < 1e-6f) return;
-    dir = glm::normalize(dir);
-    sketch.movePoint(c.entityB, pa->pos + dir * static_cast<float>(c.value));
-}
-
 bool SketchSolver::solve(Sketch& sketch, int maxIterations, double tolerance) {
     m_sketch = &sketch;
     auto& constraints = sketch.getMutableConstraints();
-    // Points are stored as float, so a distance between two of them can only
-    // be hit to about one float ulp of the coordinates involved. At 22 mm from
-    // the origin that is ~2e-6 mm - already past the 1e-6 default, so a
-    // dimension that WAS satisfied to the limit of the representation was
-    // reported unsatisfied and drawn red, then green after the next nudge
-    // (beta 6 tester report). Scale the tolerance to the coordinate size so it
-    // never asks for more precision than the data can hold.
-    {
-        double extent = 1.0;
-        for (const auto& pt : sketch.getPoints())
-            extent = std::max({extent, static_cast<double>(std::fabs(pt.pos.x)),
-                               static_cast<double>(std::fabs(pt.pos.y))});
-        tolerance = std::max(tolerance,
-                             4.0 * static_cast<double>(std::numeric_limits<float>::epsilon()) * extent);
-    }
     // Compute degrees of freedom
     int numPoints = sketch.pointCount();
     int numEquations = 0;

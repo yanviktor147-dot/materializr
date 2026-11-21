@@ -446,12 +446,9 @@ void EdgeOpController::writeEditedParams(const IopContext& ctx, float v,
 
 // ─── Commit / cancel ────────────────────────────────────────────────────────
 
-void EdgeOpController::finish(const IopContext& ctx, bool keepSelection) {
+void EdgeOpController::finish(const IopContext& ctx) {
     m_editPreview.clear();
-    // A confirmed op has consumed its picks. A cancelled one has not: the body
-    // is back exactly as it was, and the user will want to retry with another
-    // value (or a smaller set) without re-picking every edge.
-    if (!keepSelection) ctx.selection.clear();
+    ctx.selection.clear();
     // The body this gesture touched, not every visible one: commit() and
     // cancel() hold a BodyChangeScope over the document edit, and a create
     // gesture only ever changes its own body. An edit-mode replay marks its
@@ -602,7 +599,7 @@ void EdgeOpController::cancel(const IopContext& ctx) {
         ctx.doc.updateBody(bodyId(), snapshot());
     }
     refreshAllEdgeOpFaces(ctx.history, ctx.doc);   // body replayed - rebind
-    finish(ctx, /*keepSelection=*/m_editingIndex < 0);
+    finish(ctx);
 }
 
 // ─── Viewport handle ────────────────────────────────────────────────────────
@@ -848,7 +845,7 @@ void EdgeOpController::renderEdgeOpPanel(const IopContext& ctx) {
     } else {
         // The member is the truth; the buffer follows it unless being typed in.
         materializr::reseedLengthBufferIfIdle("##val", m_inputBuf, sizeof(m_inputBuf), m_value);
-        if (materializr::lengthNumberText("##val", m_inputBuf, sizeof(m_inputBuf),
+        if (materializr::inputNumberText("##val", m_inputBuf, sizeof(m_inputBuf),
                              ImGuiInputTextFlags_EnterReturnsTrue)) {
             (void)materializr::parseLength(m_inputBuf, m_value);
             update(ctx);
@@ -872,26 +869,13 @@ void EdgeOpController::renderEdgeOpPanel(const IopContext& ctx) {
     // positive (a radius / setback below 0.1 is only reachable via 0), but the
     // -10/-1/-0.1 buttons are offered so an overshoot can be walked back; they
     // stop at the 0.1 floor. 0 shows the original body mid-preview. Confirming
-    // at 0 still cancels - zero fillet = no fillet.
-    if (materializr::lengthStepperRow("edgeStep", &m_value,
+    // at 0 still cancels - zero fillet = no fillet. Desktop only.
+    if (!imTouch &&
+        materializr::lengthStepperRow("edgeStep", &m_value,
                                 /*allowNegative=*/true, 0.1f, 20.0f)) {
         m_value = std::max(m_value, 0.0f);   // a "-" press from 0 must not go negative
         materializr::formatLengthDigits(m_inputBuf, sizeof(m_inputBuf), m_value);
         update(ctx);
-    }
-
-    // A size that cannot be built used to just make the preview vanish (the
-    // tester's "it disappears without any error"). Say so, and what to do.
-    if (m_value >= 0.01f && previewRefused()) {
-        ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.62f, 0.35f, 1.0f));
-        ImGui::TextWrapped("%s", materializr::tr(isFillet
-            ? "This radius doesn't fit on the selected edges, so there is nothing to "
-              "preview. Try a smaller value."
-            : "This size doesn't fit on the selected edges (the faces beside them are "
-              "too small, or the bevels would overlap), so there is nothing to preview. "
-              "Try a smaller value or fewer edges."));
-        ImGui::PopStyleColor();
     }
 
     // Asymmetric chamfer: a second setback along the other face. Offered for
@@ -918,7 +902,7 @@ void EdgeOpController::renderEdgeOpPanel(const IopContext& ctx) {
             } else {
                 // The member is the truth; the buffer follows it unless being typed in.
                 materializr::reseedLengthBufferIfIdle("##val2", m_inputBuf2, sizeof(m_inputBuf2), m_value2);
-                if (materializr::lengthNumberText("##val2", m_inputBuf2, sizeof(m_inputBuf2),
+                if (materializr::inputNumberText("##val2", m_inputBuf2, sizeof(m_inputBuf2),
                                      ImGuiInputTextFlags_EnterReturnsTrue)) {
                     (void)materializr::parseLength(m_inputBuf2, m_value2);
                     update(ctx);
@@ -934,7 +918,8 @@ void EdgeOpController::renderEdgeOpPanel(const IopContext& ctx) {
                 ImGui::SameLine();
                 ImGui::Text("%s", materializr::unitSuffix());
             }
-            if (materializr::lengthStepperRow("edgeStep2", &m_value2,
+            if (!imTouch &&
+                materializr::lengthStepperRow("edgeStep2", &m_value2,
                                         /*allowNegative=*/true, 0.1f, 20.0f)) {
                 m_value2 = std::max(m_value2, 0.0f);
                 materializr::formatLengthDigits(m_inputBuf2, sizeof(m_inputBuf2), m_value2);

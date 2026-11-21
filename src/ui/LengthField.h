@@ -28,9 +28,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>   // GetActiveID - same include the viewport already uses
 
-#include <algorithm>
 #include <cstdio>
-#include <cstdlib>
 #include <string>
 #include <type_traits>
 
@@ -100,15 +98,10 @@ inline std::string trFormat(const char* fmt, const A&... a) {
 //
 // Magnitudes come from the unit table as {10*step, step, 0.1*step}, which for
 // millimetres is exactly {10, 1, 0.1} - the behaviour that was already there.
-// Bounds stay millimetres, but only a POSITIVE minimum is honoured (see
-// lengthNudgedValue): the maximum and any negative floor are ignored, so the
-// buttons never stop at a made-up ceiling. Call sites still pass what they
-// always passed.
-// `showZero` = false drops the 0 button, for a value where zero is not a useful
-// reset (a primitive's size).
+// Bounds stay millimetres and keep stepperRow's clamp semantics (a bound only
+// stops motion TOWARDS it), so call sites pass what they always passed.
 inline bool lengthStepperRow(const char* id, float* mm, bool allowNegative,
-                             float minMm, float maxMm, float zeroMm = 0.0f,
-                             bool showZero = true) {
+                             float minMm, float maxMm, float zeroMm = 0.0f) {
     const double s = unitInfo(currentUnit()).step;
     const double mags[3] = { 10.0 * s, s, 0.1 * s };   // DISPLAY units
     bool changed = false;
@@ -117,22 +110,14 @@ inline bool lengthStepperRow(const char* id, float* mm, bool allowNegative,
     const float h = std::max(ImGui::GetFrameHeight(), 34.0f);
 
     auto button = [&](const char* label) -> bool {
-        if (!first) {
-            // Wrap instead of overflowing: seven buttons are wider than a
-            // narrow op panel, most of all at touch scale.
-            const ImGuiStyle& st = ImGui::GetStyle();
-            const float w = ImGui::CalcTextSize(label).x + 2.0f * st.FramePadding.x;
-            const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
-            if (ImGui::GetItemRectMax().x + st.ItemSpacing.x + w <= right) ImGui::SameLine();
-        }
+        if (!first) ImGui::SameLine();
         first = false;
         return ImGui::Button(label, ImVec2(0.0f, h));
     };
     auto step = [&](const char* label, double deltaDisplay) {
         if (button(label)) {
             const float target = static_cast<float>(toMm(toDisplay(*mm) + deltaDisplay));
-            (void)maxMm;
-            *mm = lengthNudgedValue(*mm, target - *mm, minMm);
+            *mm = steppedValue(*mm, target - *mm, minMm, maxMm);
             changed = true;
         }
     };
@@ -143,7 +128,7 @@ inline bool lengthStepperRow(const char* id, float* mm, bool allowNegative,
             std::snprintf(buf, sizeof(buf), "-%g", m);
             step(buf, -m);
         }
-    if (showZero) {
+    {
         char zbuf[24];
         std::snprintf(zbuf, sizeof(zbuf), "%g", toDisplay(zeroMm));
         if (button(zbuf)) { *mm = zeroMm; changed = true; }
@@ -154,44 +139,6 @@ inline bool lengthStepperRow(const char* id, float* mm, bool allowNegative,
     }
     ImGui::PopID();
     return changed;
-}
-
-// For the double-valued members (primitive sizes and origins).
-inline bool lengthStepperRow(const char* id, double* mm, bool allowNegative,
-                             double minMm, double maxMm, double zeroMm = 0.0,
-                             bool showZero = true) {
-    float f = static_cast<float>(*mm);
-    const bool changed = lengthStepperRow(id, &f, allowNegative, static_cast<float>(minMm),
-                                          static_cast<float>(maxMm),
-                                          static_cast<float>(zeroMm), showZero);
-    if (changed) *mm = static_cast<double>(f);
-    return changed;
-}
-
-namespace detail {
-// ImGui CharFilter callback: refuse a digit that would add a decimal place the
-// unit does not display (see decimalDigitRefused). UserData -> int maxDecimals.
-inline int decimalCapFilter(ImGuiInputTextCallbackData* d) {
-    if (d->EventFlag != ImGuiInputTextFlags_CallbackCharFilter) return 0;
-    const int maxDecimals = *static_cast<const int*>(d->UserData);
-    ImGuiInputTextState* st = ImGui::GetInputTextState(GImGui->ActiveId);
-    if (!st) return 0;
-    return decimalDigitRefused(st->GetText(), st->TextLen, st->GetCursorPos(),
-                               st->GetSelectionStart(), st->GetSelectionEnd(),
-                               maxDecimals, d->EventChar) ? 1 : 0;
-}
-} // namespace detail
-
-// inputNumberText for a LENGTH: on desktop the field stops accepting digits past
-// the current display unit's decimals (two in millimetres), so 0.005 cannot be
-// typed only to be rounded to 0.01. The touch pad keeps its own entry.
-inline bool lengthNumberText(const char* label, char* buf, size_t bufSize,
-                             ImGuiInputTextFlags flags = 0, bool padEnterCommits = false) {
-    if (touchMode()) return inputNumberText(label, buf, bufSize, flags, padEnterCommits);
-    int decimals = unitInfo(currentUnit()).decimals;
-    return ImGui::InputText(label, buf, bufSize,
-                            flags | ImGuiInputTextFlags_CallbackCharFilter,
-                            detail::decimalCapFilter, &decimals);
 }
 
 inline bool lengthBufferIsActive(const char* label) {
@@ -222,76 +169,13 @@ struct LengthEdit {
 // never drifts, and a unit switch shows correctly on the next frame. Step and
 // precision come from the unit table; there are deliberately no step/fmt
 // parameters to get wrong.
-namespace detail {
-// ImGui::InputDouble with the decimal cap (#160). InputDouble hands its text
-// field no callback, so a third decimal could be typed and was then rounded away
-// on commit; this is InputScalar's own layout (a text field plus -/+ step
-// buttons, same ID scope) with decimalCapFilter on the text. Desktop only - the
-// touch pad has its own entry. `active` reports the TEXT field, which is what a
-// caller's IsItemActive() read after InputDouble gave.
-inline bool cappedStepperInput(const char* label, double* v, double step, double stepFast,
-                               const char* fmt, ImGuiInputTextFlags flags, int decimals,
-                               bool* active) {
-    ImGuiWindow* window = ImGui::GetCurrentWindow();
-    if (window->SkipItems) { if (active) *active = false; return false; }
-    ImGuiContext& g = *GImGui;
-    ImGuiStyle& style = g.Style;
-    char buf[64];
-    std::snprintf(buf, sizeof buf, fmt, *v);
-
-    bool changed = false;
-    const float btn = ImGui::GetFrameHeight();
-    ImGui::BeginGroup();
-    ImGui::PushID(label);
-    ImGui::SetNextItemWidth(std::max(1.0f, ImGui::CalcItemWidth() - (btn + style.ItemInnerSpacing.x) * 2));  // as before: the label lands where the buttons were
-    // As InputScalar: the data is compared, not the string, so no edit is marked
-    // for an untouched value.
-    g.NextItemData.ItemFlags |= ImGuiItemFlags_NoMarkEdited;
-    ImGui::InputText("", buf, sizeof buf,
-                     flags | ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CharsScientific |
-                         ImGuiInputTextFlags_CallbackCharFilter,
-                     decimalCapFilter, &decimals);
-    // NoMarkEdited (set above, as InputScalar does) keeps ImGuiItemStatusFlags_Edited
-    // off the item, so IsItemEdited() is never true here and a typed value was
-    // dropped. InputScalar reads EditedInternal, which MarkItemEdited sets
-    // regardless of that flag.
-    if (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_EditedInternal) {
-        const double parsed = std::strtod(buf, nullptr);
-        if (parsed != *v) { *v = parsed; changed = true; }
-    }
-    if (active) *active = ImGui::IsItemActive();
-    g.LastItemData.ItemFlags &= ~ImGuiItemFlags_NoMarkEdited;
-
-    // No -/+ buttons (1.8.0-beta.5 tester list): every length field already sits
-    // above a -10 .. +10 stepper row whose -1 / +1 do the same job, so the
-    // buttons were a duplicate. The label takes their place, right of the field.
-    (void)step; (void)stepFast;
-
-    const char* labelEnd = ImGui::FindRenderedTextEnd(label);
-    if (label != labelEnd) {
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        ImGui::TextEx(label, labelEnd);
-    }
-    ImGui::PopID();
-    ImGui::EndGroup();
-    if (changed) ImGui::MarkItemEdited(g.LastItemData.ID);
-    return changed;
-}
-} // namespace detail
-
 inline LengthEdit lengthField(const char* label, double* mm, ImGuiInputTextFlags flags = 0) {
     const UnitInfo& u = unitInfo(currentUnit());
     char fmt[8];
     std::snprintf(fmt, sizeof fmt, "%%.%df", u.decimals);
     double disp = toDisplay(*mm);
-    bool changed, active;
-    if (touchMode()) {
-        changed = inputNumber(label, &disp, u.step, u.step * 10.0, fmt, flags);
-        active  = ImGui::IsItemActive();   // valid: the item just submitted IS this field
-    } else {
-        changed = detail::cappedStepperInput(label, &disp, u.step, u.step * 10.0, fmt, flags,
-                                             u.decimals, &active);
-    }
+    const bool changed = inputNumber(label, &disp, u.step, u.step * 10.0, fmt, flags);
+    const bool active  = ImGui::IsItemActive();   // valid: the item just submitted IS this field
     if (changed) *mm = lengthFieldCommit(disp);
     return { changed, active };
 }

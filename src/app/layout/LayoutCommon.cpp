@@ -21,7 +21,6 @@
 #include "app/ProjectSession.h" // Tabs submenu reads session names
 #include <filesystem>
 #include "ui/AboutDialog.h"
-#include "ui/BugReportDialog.h"
 #include "ui/HelpPanel.h"
 #include "ui/LandingPage.h"   // File → New Project dismisses the landing page
 #include "ui/LogoTexture.h"
@@ -30,8 +29,6 @@
 #include "ui/PolygonSidesMenu.h"
 #include "ui/Toolbar.h"
 #include "ui/TouchIcons.h"
-#include "ui/TouchTheme.h"
-#include "ui/TouchWidgets.h"
 #include "ui/UiTheme.h"   // accentText for the touch tabs sheet heading
 #include "viewport/Viewport.h"
 #include "gl_common.h"
@@ -49,7 +46,6 @@
 #include <Geom_Surface.hxx>
 #include <TopoDS.hxx>
 
-#include <cfloat>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -92,26 +88,6 @@ ImTextureID logoTexture() {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
     return (ImTextureID)(intptr_t)tex;
-}
-
-bool logoMenuButton(const char* id, float side) {
-    const float s = uiScale();
-    ImGui::PushID(id);
-    const ImVec2 p = ImGui::GetCursorScreenPos();
-    const bool pressed = ImGui::InvisibleButton("##logobtn", ImVec2(side, side));
-    ImVec4 bg = touchui::rowBg();
-    if (ImGui::IsItemHovered()) bg = touchui::hoverBg();
-    if (ImGui::IsItemActive())  bg = touchui::pressBg();
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(p, ImVec2(p.x + side, p.y + side),
-                      ImGui::GetColorU32(bg), touchui::radius(10.0f * s));
-    const float lg = side * 0.64f;
-    const ImVec2 c0(p.x + (side - lg) * 0.5f, p.y + (side - lg) * 0.5f);
-    dl->AddImageRounded(logoTexture(), c0, ImVec2(c0.x + lg, c0.y + lg),
-                        ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE,
-                        touchui::radius(5.0f * s));
-    ImGui::PopID();
-    return pressed;
 }
 
 } // namespace layoutui
@@ -251,8 +227,7 @@ void Application::renderTabMenuItems(size_t i) {
     ImGui::Separator();
     if (ImGui::MenuItem(materializr::tr("Close Tab"))) {
         if (activateTabFor(i))
-            guardedOpen([this]() { closeSession(m_activeSession); saveAppSettings(); },
-                        /*closingTab=*/true);
+            guardedOpen([this]() { closeSession(m_activeSession); }, /*closingTab=*/true);
     }
 }
 
@@ -329,8 +304,7 @@ void Application::renderViewportTabBar() {
         if (!open) {
             // The tab's × - same guarded flow as the menu item.
             if (activateTabFor(i))
-                guardedOpen([this]() { closeSession(m_activeSession); saveAppSettings(); },
-                        /*closingTab=*/true);
+                guardedOpen([this]() { closeSession(m_activeSession); }, /*closingTab=*/true);
             closedOne = true;   // indices may have shifted; finish this frame
         }
         ImGui::PopID();
@@ -407,7 +381,7 @@ static const char* shortcutHint(const std::string& label) {
 
 // The four menu bodies, shared by classic's menu bar and the modern/im-touch
 // overflow popup - one item list each, so the layouts cannot drift.
-void Application::renderFileMenuItems(bool withSettings, bool withExit) {
+void Application::renderFileMenuItems(bool withSettings) {
     if (ImGui::MenuItem(materializr::tr("Home Screen"))) goToHomeScreen();
     if (ImGui::MenuItem(materializr::tr("Open Project..."), shortcutHint(keyLabel(KeyAction::Open)))) loadProject();
     // Open Recent - persisted, most-recent-first. Greyed when empty.
@@ -452,8 +426,7 @@ void Application::renderFileMenuItems(bool withSettings, bool withExit) {
     }
     if (ImGui::MenuItem(materializr::tr("Close Tab"))) {
         // Same prompt-then-act path as every destructive project action.
-        guardedOpen([this]() { closeSession(m_activeSession); saveAppSettings(); },
-                        /*closingTab=*/true);
+        guardedOpen([this]() { closeSession(m_activeSession); }, /*closingTab=*/true);
     }
     ImGui::Separator();
 
@@ -516,15 +489,9 @@ void Application::renderFileMenuItems(bool withSettings, bool withExit) {
         }
     }
 #if !defined(MZ_IOS)   // iOS apps do not offer their own quit
-    if (withExit) {
-        ImGui::Separator();
-        renderExitMenuItem();
-    }
-#endif
-}
-
-void Application::renderExitMenuItem() {
+    ImGui::Separator();
     if (ImGui::MenuItem(materializr::tr("Exit"), shortcutHint("Alt+F4"))) m_window->requestClose(true);
+#endif
 }
 
 void Application::renderEditMenuItems() {
@@ -543,12 +510,6 @@ void Application::renderEditMenuItems() {
                         !histLocked && m_history->canRedo())) {
         redoWithCascade();
     }
-    ImGui::Separator();
-    // Re-run every feature from its sketch: the fix for a project saved while a
-    // body did not match its sketch (#170).
-    if (ImGui::MenuItem(materializr::tr("Update model from sketches"), nullptr, false, !histLocked))
-        resyncModelToSketches(/*manual=*/true);
-    ImGui::SetItemTooltip("%s", materializr::tr("Rebuild every feature from its sketch, so bodies match the sketches again."));
 }
 
 void Application::renderConstructionMenuItems() {
@@ -706,7 +667,6 @@ void Application::renderHelpMenuItems() {
     // knowing about it. See renderPluginMenuItems.
     renderPluginMenuItems("Help");
     ImGui::Separator();
-    if (ImGui::MenuItem(materializr::tr("Report a Bug..."))) m_bugReportDialog->open();
     if (ImGui::MenuItem(materializr::tr("About Materializr..."))) m_aboutDialog->setVisible(true);
 }
 
@@ -731,17 +691,11 @@ void Application::renderPluginMenuItems(const char* menuName) {
     }
 }
 
-// The menu behind the logo button, shared by the modern and im-touch layouts:
-// the full desktop menus laid out FLAT (File/Edit/View/Help are collapsible
-// sections in one popup - no hover-and-wait submenu tree), via the
-// shared item lists (renderFileMenuItems & co.) so these layouts and classic's
-// menu bar cannot drift. Settings follows, and Exit sits alone at the bottom.
-// The popup scrolls when it is taller than the window (large UI scales).
-// Caller does OpenPopup("##TouchOverflow") on its trigger button.
+// The ⋯/☰ menu shared by the modern and im-touch layouts: the full desktop
+// menus, flattened one level, via the shared item lists (renderFileMenuItems
+// & co.) so these layouts and classic's menu bar cannot drift. Caller does
+// OpenPopup("##TouchOverflow") on its trigger button.
 void Application::renderTouchOverflowPopup() {
-    const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowSizeConstraints(
-        ImVec2(0.0f, 0.0f), ImVec2(FLT_MAX, vp->WorkSize.y * 0.94f));
     if (!ImGui::BeginPopup("##TouchOverflow")) return;
     // The icon macro concatenates into the label, so these cannot be plain
     // literals for tr(); build icon + translated word + a ###pin so the menu's
@@ -751,35 +705,28 @@ void Application::renderTouchOverflowPopup() {
         buf = std::string(icon) + "  " + materializr::tr(en) + "###" + en;
         return buf.c_str();
     };
-    // Each section is a header the user expands on demand - all closed to
-    // start, so Settings and Exit are always in view and one extra tap beats
-    // scrolling a long list. Sections open independently; ImGui keeps their
-    // state for as long as the popup window lives.
-    // The open/closed state is remembered (AppSettings::menuSectionsOpen): the
-    // header is told what the saved bit says each frame and its answer is
-    // written back, so a click both toggles and sticks - across closing the
-    // menu and across launches.
-    auto section = [&](const char* en, int bit, auto&& body) {
-        const std::string lbl = std::string(materializr::tr(en)) + "###sec" + en;
-        ImGui::SetNextItemOpen((m_menuSectionsOpen & bit) != 0, ImGuiCond_Always);
-        const bool open = ImGui::CollapsingHeader(lbl.c_str());
-        if (open) m_menuSectionsOpen |= bit; else m_menuSectionsOpen &= ~bit;
-        if (open) body();
-    };
-    section("File", 1, [&] { renderFileMenuItems(false, false); });   // Settings and Exit are placed below
-    section("Edit", 2, [&] { renderEditMenuItems(); });
-    section("View", 4, [&] { renderViewMenuItems(); });
-    section("Help", 8, [&] { renderHelpMenuItems(); });
+    if (ImGui::BeginMenu(menuLbl(MZ_ICON_OPEN, "File"))) {
+        renderFileMenuItems(false);   // Settings is exposed at the bottom instead
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu(menuLbl(MZ_ICON_UNDO, "Edit"))) {
+        renderEditMenuItems();
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu(menuLbl(MZ_ICON_FOCUS, "View"))) {
+        renderViewMenuItems();
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu(menuLbl(MZ_ICON_ABOUT, "Help"))) {
+        renderHelpMenuItems();
+        ImGui::EndMenu();
+    }
     ImGui::Separator();
     if (ImGui::MenuItem(menuLbl(MZ_ICON_SETTINGS, "Settings..."))) {
         m_settingsOrbitButton = m_orbitButton;
         m_settingsPanButton   = m_panButton;
         m_showSettings = true;
     }
-#if !defined(MZ_IOS)
-    ImGui::Separator();
-    renderExitMenuItem();
-#endif
     ImGui::EndPopup();
 }
 
@@ -799,19 +746,15 @@ void Application::renderRailPolygonSidesPopup(bool clicked) {
     }
 }
 
-void Application::renderRailDrawOriginPopup(bool isRect, bool wasActive, bool clicked,
-                                             bool inMenuZone) {
+void Application::renderRailDrawOriginPopup(bool isRect, bool wasActive, bool clicked) {
     // Same menu as the classic toolbar's (Toolbar.cpp drawOriginMenu), so every
     // layout answers the second tap the same way. The popup id is shared: only
     // one rail button is ever tapped at a time, and BeginPopup keys on the id
     // within the calling button's ID scope.
     const ToolAction act = isRect ? ToolAction::Rectangle : ToolAction::Circle;
-    // First tap on the button: pick the tool. A tap on its corner mark opens the
-    // "Draw from" menu at once - also on the first tap; a second tap on the
-    // body of the active tool does the same, as it always did.
     if (clicked) {
-        if (wasActive || inMenuZone) ImGui::OpenPopup("##railDrawOrigin");
-        if (!wasActive) handleToolAction(static_cast<int>(act));
+        if (wasActive) ImGui::OpenPopup("##railDrawOrigin");
+        else handleToolAction(static_cast<int>(act));
     }
     if (ImGui::BeginPopup("##railDrawOrigin")) {
         int cur = 0;

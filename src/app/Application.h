@@ -18,7 +18,6 @@
 #include <glm/glm.hpp>
 #include "io/ImageDecode.h"   // DecodedImage - thumbnail peek results
 #include "ui/UpdateChecker.h"
-#include "ui/RailOrder.h"
 #include <TopoDS_Shape.hxx>
 #include "viewport/MeshDispatch.h"
 #ifdef MZR_PARALLEL_MESH_TESTING
@@ -78,7 +77,6 @@ class SectionView;
 class Toolbar;
 class HistoryPanel;
 class AboutDialog;
-class BugReportDialog;
 class WelcomeScreen;
 class ShortcutsPanel;
 class HelpPanel;
@@ -139,15 +137,6 @@ private:
     // few seconds, doesn't fight the per-frame status-bar message.
     void showThreadsLastToast();
     void showToast(const std::string& text, double seconds = 4.0);
-    // Blink red squares over the free ends of `sketchId`'s open contours for a
-    // few seconds - what an Extrude / Push / Lathe that was refused for lack of
-    // a closed profile points at.
-    void flagOpenEnds(int sketchId, double seconds = 4.0);
-    // Add the geometry already lying ON the active sketch's plane - body edges
-    // and vertices, the cross-section where the plane cuts a body, and points
-    // and lines of other visible sketches on the same plane - to its snap
-    // references. Once per sketch entry (#155).
-    void refreshCoplanarReferences();
     void renderTransientToast();
     std::string m_toastText;
     double m_toastExpiry = 0.0;   // < 0: not yet drawn, armed on first draw
@@ -158,9 +147,6 @@ private:
     int  m_airfoilPointBudget = 40; // spline control points per surface
     void renderMirrorToolPanel(); // interactive mirror line controls (floating)
     void renderOffsetToolPanel(); // offset distance / side / corner style (floating)
-    void renderCornerToolPanel(); // sketch fillet / chamfer: kind + size (floating)
-    void renderPolygonToolPanel(); // polygon: radius/diameter, in/circumscribed, exact size + angle
-    void renderShapeToolPanel();   // line / circle / rectangle / arc: typed length, angle, size + Place
     // Camera-upright default rotation for Text/SVG placement.
     void seedUprightPlacementAngle();
     void initRenderers();
@@ -227,49 +213,9 @@ private:
     // Idle-render throttle: counts down frames to render after the last event
     // or active-work wakeup. Zero = skip the frame and sleep for the next event.
     int m_wakeFrames = 0;
-    std::vector<glm::vec3> m_openEndMarks;   // world positions, see flagOpenEnds()
-    double m_openEndMarksUntil = 0.0;        // ImGui::GetTime() the marks expire at
     // True only while a load is tessellating in the deferred slot: tells
     // rebuildMeshes to pump a per-body progress frame (safe between frames).
     bool m_pumpMeshProgress = false;
-    // With m_pumpMeshProgress: a Cancel on the card stops the per-body rebuild
-    // where it is (the bodies not reached stay dirty) instead of finishing the
-    // whole batch behind a card that no longer moves. Only for callers that undo
-    // what they added when cancelled (runWithMeshProgress).
-    bool m_meshProgressAbortable = false;
-    // The card has no Cancel button: for work that has to finish (the rebuild of
-    // a tab you switched to - there is nothing to go back to mid-way).
-    bool m_progressNoCancel = false;
-    // The incoming tab's meshes are being built between frames behind the card;
-    // the viewport must not do the same rebuild synchronously in its frame.
-    bool m_tabMeshQueued = false;
-    bool tabMeshRebuildPending() const { return m_tabMeshQueued && !m_deferredHeavy.empty(); }
-    void queueTabMeshRebuild();
-    // The tabs the user came from, most recent last. Held by identity because the
-    // index of a tab moves when another one closes. Cancel on the "Preparing view"
-    // card walks back through it: to the tab you were on, and on from there.
-    std::vector<const ProjectSession*> m_tabBackStack;
-    // A switch made BY Cancel: the tab being left is not somewhere to come back to.
-    bool m_tabSwitchIsBack = false;
-    // Cancel left the active tab unbuilt (nothing to go back to, so it landed on the
-    // Home Screen); its view is built when it is next shown.
-    bool m_tabViewCancelled = false;
-    void pushTabBackStack(const ProjectSession* leaving);
-    void forgetTabInBackStack(const ProjectSession* gone);
-    void cancelTabView();
-    // Run `apply` (an edit that adds or changes many bodies) between frames
-    // behind the progress card, then tessellate what it touched on the worker
-    // pool and rebuild the renderer meshes under the same card - instead of
-    // an apparently frozen window (#181). Call from a deferred heavy task only
-    // (renderProgressFrame needs to run between frames). Returns true when the
-    // user hit Cancel during the card.
-    bool runWithMeshProgress(const char* label, const std::function<void()>& apply);
-    // A plugin's heavy task (a Boolean): queued for the between-frames slot, run
-    // with a Cancel-able progress reporter whose card only appears once the work
-    // has taken a moment, then the bodies it changed are marked for re-meshing
-    // (PluginContext::runHeavy).
-    void runHeavyPluginTask(std::string label,
-                            std::function<void(const std::function<bool(float, const char*)>&)> task);
     // Launch-time update check, run on a worker so a slow/unreachable network
     // can't freeze startup (it was a synchronous call with a 10 s timeout -
     // the real cause of the "not responding" on launch). Polled each frame.
@@ -281,9 +227,7 @@ private:
     // withSettings=false drops the nested "Settings..." item - the touch
     // overflow exposes Settings at the top level, so it shouldn't also nest it
     // under File. The desktop menu bar keeps it (default true).
-    // withExit=false leaves Exit off so the flat touch menu can put it last.
-    void renderFileMenuItems(bool withSettings = true, bool withExit = true);
-    void renderExitMenuItem();
+    void renderFileMenuItems(bool withSettings = true);
     void renderEditMenuItems();
     // Derived construction Plane/Axis items - the popup behind the touch rail's
     // "Construct" group. Selection-aware (mirrors Toolbar's Add Plane/Axis).
@@ -306,8 +250,8 @@ private:
     // Rectangle / Circle in the tool rail: the first tap picks the tool, a tap
     // while it is already active opens a Corner/Center (or Center/2-Point)
     // menu. `wasActive` is the rail entry's active flag from BEFORE the tap.
-    void renderRailDrawOriginPopup(bool isRect, bool wasActive, bool clicked, bool inMenuZone = false);
-    void renderTouchOverflowPopup(); // shared logo-button menu popup (modern + im-touch)
+    void renderRailDrawOriginPopup(bool isRect, bool wasActive, bool clicked);
+    void renderTouchOverflowPopup(); // shared ⋯/☰ menu popup (modern + im-touch)
     // Undo/redo with the sketch-edit cascade (shared by the Edit menu, the
     // touch shell's top bar, and nothing else - the Ctrl+Z shortcut has its
     // own copy in handleShortcuts pending a merge).
@@ -328,19 +272,6 @@ private:
     void exportSettings();    // Settings dialog → Export…  (write current prefs as JSON)
     void importSettings();    // Settings dialog → Import…  (load prefs from JSON, apply live)
     AppSettings currentSettings() const;     // gather current prefs into a struct
-    // The remembered two-way tool switches (rect/circle "draw from", radius vs
-    // diameter, arc dimension kind, polygon in/circumscribed, corner kind,
-    // primitive radius/diameter), one bit each in AppSettings::toolSwitches.
-    int  packToolSwitches() const;
-    void unpackToolSwitches(int bits);
-    // Logo-menu sections (Modern / im-touch) the user has expanded, as
-    // AppSettings::menuSectionsOpen bits. Written back by renderTouchOverflowPopup.
-    int  m_menuSectionsOpen = 0;
-    // What the last saved settings held for the two above; a mismatch next
-    // frame means a switch or section changed and settings are re-saved.
-    int  m_savedToolSwitches = -1;
-    int  m_savedMenuSections = -1;
-    void saveRememberedUiStateIfChanged();
     void        applyAppSettings(const AppSettings& s); // push prefs onto the live members
     void renderMirrorPopup();
     void renderUpdatePopup();
@@ -424,11 +355,6 @@ private:
     // to show (no visible bodies) - the save then simply carries no thumbnail.
     // Main thread only (needs the GL context).
     bool captureProjectThumbnailPNG(std::vector<uint8_t>& pngOut);
-    // True while a background tab's document is swapped in for a save (the
-    // quit-time autosave) but the GPU renderers still hold ANOTHER tab's
-    // meshes. captureProjectThumbnailPNG must not render then - it carries the
-    // project's existing thumbnail over instead.
-    bool m_thumbRendererStale = false;
     // Render exactly what the LIVE viewport currently shows - the user's own
     // camera angle, bodies, edges, and any plugin overlay drawn after bodies
     // (reference images/planes/axes, the AI Assistant's reference-mesh
@@ -516,8 +442,6 @@ private:
     // no geometry, no history) - i.e. safe to load into without displacing
     // anything the user still wants.
     bool activeSessionIsScratch() const;
-    // Any tab (not just the active one) that is an untouched empty workspace.
-    bool sessionIsBlank(size_t idx) const;
     // The open tab already holding this project, or m_sessions.size() for
     // none. Compares the ACTIVE tab against m_currentProjectPath - an inactive
     // session's own `projectPath` is only refreshed when it's stashed on the
@@ -587,9 +511,6 @@ private:
     void startThumbnailPeeks(const std::vector<std::string>& refs);
     void drainThumbnailPeeks();   // main thread, while the landing page is up
     std::shared_ptr<ThumbJob> m_thumbJob;
-    // Home screen "Delete project...": the tile waiting on the confirmation.
-    std::string m_landingDeleteRef, m_landingDeleteName;
-    bool m_landingDeleteAsk = false;     // open the confirm popup next frame
 
     // Cross-project parts: scratch-load `ref` and open the "Import Parts"
     // modal listing its bodies + sketches. `intoNewProject` (landing-tile
@@ -687,9 +608,6 @@ private:
     // Make an independent copy of a sketch (Items panel → Duplicate Sketch).
     void duplicateSketch(int sketchId);
     void deleteSketch(int sketchId);   // undoable (DeleteSketchOp)
-    // Fillet / Chamfer asked for on a FACE selection: swap it for the edges
-    // around the face(s). False when there is no usable face selection.
-    bool selectEdgesAroundSelectedFaces();
     void enterSketchMode();
     void enterSketchOnPlane(const gp_Pln& plane);
     void enterSketchOnFace(const TopoDS_Face& face, int sourceBodyId = -1);
@@ -707,10 +625,6 @@ private:
     // was drawn on (red preview). Used by the region toolbar where viewport
     // clicks land, since clicking a sketch selects a region, not the whole sketch.
     void subtractSketchRegion(int sketchId, int regionIndex);
-    // Extrude / Subtract from the WHOLE selection: every selected region (any
-    // number of sketches) or, with none, every selected sketch's profile, as one
-    // combined profile. Returns false when nothing in the selection qualifies.
-    bool extrudeSelectedProfiles(ExtrudeMode mode);
     TopoDS_Face buildSketchProfileFace(const Sketch& sketch) const;
     void exitSketchMode();
 
@@ -766,13 +680,6 @@ private:
     // host face's wires (holes, fillets) into the sketch - and a push/pull
     // of a "circle around an existing hole" wrongly produces a solid bar.
     void ensureSketchSourceFace(int sketchId);
-    // A sketch drawn on a body keeps the 3D face it was drawn on (its regions graft that
-    // face's holes), and only loading a project ever re-derived it. After the host was
-    // rebuilt or moved the old face lingered - at its OLD place, drawn as a phantom
-    // outline that could still be picked (#185). Re-derive it for every sketch whose
-    // host body is in `onlyBodies` (all of them when null) and whose face is no longer
-    // part of that body.
-    void refreshHostFaces(const std::set<int>* onlyBodies);
 
     // Re-adopt the body a free-floating sketch sits flat ON. When a sketch has
     // no body link (never linked, e.g. drawn on a construction plane and used
@@ -840,7 +747,10 @@ private:
     // NB: no blanket m_meshesDirty here. Push/Pull's preview marks only the
     // bodies it touched (markPreviewDirty) - a full rebuild per frame is both
     // the dense-project perf hazard and what erases the ghost tool volume.
-    void beginPushPull();
+    void beginPushPull() {
+        cancelActiveIops();
+        m_ppCtl.beginPushPull(iopContext());
+    }
     // applySnap=false bypasses the grid snap for that update - the stepper
     // buttons are an explicit fine override (a 0.1 nudge under a 1 mm grid must
     // actually move), so they call updatePushPull(false).
@@ -879,8 +789,7 @@ private:
     void beginInteractiveExtrude(const TopoDS_Shape& profile,
                                  ExtrudeMode mode = ExtrudeMode::NewBody,
                                  int targetBody = -1,
-                                 int sourceSketchId = -1,
-                                 SketchScope scope = SketchScope::Whole);
+                                 int sourceSketchId = -1);
 
     // Re-execute every enabled ExtrudeOp in history that was originally built
     // from this sketch - called when the user edits a constraint value via
@@ -894,23 +803,7 @@ private:
     // `budgetMs` > 0 (an in-sketch edit, see requestSketchCascade): give up once
     // the replay runs past it, roll the model back untouched and return false -
     // the caller defers the sketch to Finish. Otherwise always returns true.
-    //
-    // `resync`: an automatic re-sync of a model that was saved out of step with
-    // its sketches (see resyncModelToSketches). It must never surprise the user:
-    // a step that cannot follow is NOT disabled and nothing is toasted - the
-    // replay simply rolls back and the model stays as it was saved.
-    bool cascadeFromSketchEdit(int sketchId, double budgetMs = -1.0, bool resync = false);
-    bool cascadeFromSketchEditImpl(int sketchId, double budgetMs, bool resync);
-    // The edit just recorded slid or turned the whole of `sketchId` as one piece:
-    // move the sketches drawn on the body it drives along with it (#185).
-    void carryHostedSketchesWithEdit(int sketchId);
-    // Re-run every feature built from a sketch, so a body saved while it did not
-    // match its sketch (a 1.8.0-beta.2 and earlier bug: edits made through the
-    // sketch tools never reached the body until an Undo/Redo) follows it again.
-    // `manual` = the Edit menu command: say what happened either way. Otherwise
-    // (the automatic pass after opening such a file) it is silent unless the model
-    // actually changed. Runs between frames behind the progress card.
-    void resyncModelToSketches(bool manual);
+    bool cascadeFromSketchEdit(int sketchId, double budgetMs = -1.0);
     // The one entry point for a sketch edit that should move the body. Outside
     // sketch mode it cascades now. Inside it, a model that has already proved
     // slow only notes the sketch for Finish; otherwise the cascade runs with
@@ -925,7 +818,6 @@ private:
     double m_lastCascadeMs = 0.0;
     std::set<int> m_pendingSketchCascades;
     void flushPendingSketchCascades();
-    void flushPendingCascadesBeforeSave();   // a save must not write bodies out of step with their sketches
     // Map each sketch id to the body ids it drives (created/modified through a
     // sketch-sourced extrude / push-pull). Used by the gizmo commit to tell a
     // unison move (body + its driving sketch) from a lone move that de-links.
@@ -1004,7 +896,6 @@ private:
     std::unique_ptr<ThemeManager> m_themeManager;
     std::unique_ptr<PropertiesPanel> m_propertiesPanel;
     std::unique_ptr<AboutDialog> m_aboutDialog;
-    std::unique_ptr<BugReportDialog> m_bugReportDialog;   // Help > Report a Bug
     std::unique_ptr<WelcomeScreen> m_welcomeScreen;
     std::unique_ptr<LandingPage> m_landingPage;
     // Parts-picker modal state (see openPartsPicker). The scratch document
@@ -1090,12 +981,6 @@ private:
     // partial content. -1 = no sketch in progress (or pre-sketch state
     // wasn't capturable).
     int m_sketchEntryHistoryStep = -1;
-    // The sketch's geometry signature at the last point the model was rebuilt from it
-    // (sketch entry, or a completed cascade). exitSketchMode compares against it.
-    size_t m_sketchSyncedSig = 0;
-    bool   m_sketchSyncedSigValid = false;
-    void markSketchSynced();
-    int m_sketchUndoFloorStep = -1;   // Ctrl+Z stops here; below the entry step when reopening a sketch
     int m_activeSketchId = -1; // document id of the sketch being edited, or -1 if new
 
     // In-progress-sketch crash/kill recovery (see io/SketchRecovery). While in
@@ -1160,7 +1045,6 @@ private:
     int  m_dimEditingId = -1;
     char m_dimEditingBuf[32] = "";
     bool m_dimEditingFocus = false;
-    int  m_dimEditErrId = -1;   // constraint whose last Confirm was refused (shows the hint)
     bool m_dimEditingClickedThisFrame = false;
     // Set by applyPendingDimension() (Dimension tool commit) to defer
     // ImGui::OpenPopup("##DimEdit") to the viewport's own ImGui window scope
@@ -1267,8 +1151,6 @@ private:
     // Interactive mirror line manipulated by a sketch-style move/rotate gizmo.
     // Reuses the SketchGizmoHandle vocabulary (MoveX/MoveY/MoveFree/Rotate).
     SketchGizmoHandle m_mirrorGizmoHandle = SketchGizmoHandle::None;
-    // "Along a line": the next click on a sketch line puts the mirror line on it.
-    bool m_mirrorPickingLine = false;
     glm::vec2 m_mirrorGizmoStartAnchor{0.0f}; // mirror anchor at drag start
     glm::vec2 m_mirrorGizmoGrab{0.0f};        // sketch-space cursor at drag start
     float m_mirrorGizmoStartAngle = 0.0f;     // mirror angle at drag start
@@ -1343,11 +1225,6 @@ private:
     // Application_Viewport so press-and-hold synthesizes a right-click over the
     // tree, opening a row's context menu just like the classic/modern panels).
     bool m_imTouchTreeHovered = false;
-    // The model tree is a see-through overlay, which makes a long list hard to
-    // read over the model. Once the user scrolls it or presses inside it, it
-    // goes nearly opaque and stays that way until they press anywhere else.
-    bool  m_imTouchTreeEngaged = false;
-    float m_imTouchTreeScrollY = 0.0f;   // last frame's scroll, to spot a scroll
     // Tab strip (classic in-viewport bar / modern pills): hovered this frame.
     // Same purpose - both already call BeginPopupContextItem for Save / Save As
     // / Close, but on touch that menu was UNREACHABLE: the long-press gate arms
@@ -1392,33 +1269,14 @@ private:
     float m_touchRightW = 300.0f;
     // Tool-rail width, same convention (edge-tab drag, persisted).
     float m_touchRailW = 92.0f;
-    // User-arranged tool order for the Modern / im-touch rails (long-press a
-    // tool and drag). Persisted through AppSettings::toolOrder.
-    materializr::touchui::RailOrder m_railOrder;
     // Edge-tab drag state (tap vs drag disambiguation).
     bool m_railTabDragged = false, m_rightTabDragged = false;
 
     // Autosave: once the project has been saved at least once (has a path on
     // disk), save it again automatically on close (Application::closeProject)
     // so quitting/closing a dirty tab doesn't need the save prompt. Toggled in
-    // File > Settings.
+    // File > Settings. No longer a periodic timer - see closeProject().
     bool m_autosaveEnabled = false;
-    // Optional, off by default: ALSO re-save the project every N minutes while
-    // it has unsaved changes (see the autosave block in Application::run).
-    bool m_autosavePeriodic = false;
-    // Settings > Sketch: deleting a sketch also deletes the bodies its
-    // extrude / lathe steps CREATED (never bodies it merely cut). Off by default.
-    bool m_deleteSketchRemovesBodies = false;
-    std::vector<int> bodiesCreatedFromSketch(int sketchId) const;
-    int m_autosaveIntervalMin = 5;
-    double m_lastAutosaveTime = 0.0;
-
-    // Soft shading on the closed contours of the sketch being edited, so a loop
-    // that is really closed reads as a surface (cached per sketch geometry; see
-    // the draw block in renderViewport).
-    std::vector<TopoDS_Face> m_autoFillFaces;
-    const Sketch* m_autoFillSketch = nullptr;
-    uint64_t m_autoFillKey = 0;
 
     // Invert the cube-drag → orbit direction (Settings).
     bool m_invertCubeDrag = false;
@@ -1668,8 +1526,7 @@ private:
     // Mirror: single button opens a popup; "across a face" arms face-pick mode.
     bool m_showMirrorPopup = false;
     bool m_mirrorPickFace = false;
-    int m_mirrorBodyId = -1;              // primary (first selected); >=0 = a mirror is pending
-    std::vector<int> m_mirrorBodyIds;     // every selected body to mirror
+    int m_mirrorBodyId = -1;
 
     // Scale side panel (shown in Scale gizmo mode): X/Y/Z percentages + uniform.
     float m_scalePct[3] = {100.0f, 100.0f, 100.0f};
@@ -1873,13 +1730,6 @@ private:
         for (auto* c : m_iops) if (c->draggingHandle()) return true;
         return false;
     }
-    // An active controller that wants a click to be a stray: selection clicks
-    // are off while one is live, except for the ones that read the selection.
-    bool anyIopBlocksSelectionClicks() const {
-        for (auto* c : m_iops)
-            if (c->active() && !c->wantsSelectionClicks()) return true;
-        return false;
-    }
     // A controller owns the viewport's left-drag (it draws handles there).
     bool anyIopWantsViewportInput() const {
         for (auto* c : m_iops)
@@ -1980,16 +1830,8 @@ private:
     // commit leaves the op in history at the user's values, cancel undoes it.
     enum class PatternKind { Linear, Radial };
     bool m_patternActive = false;
-    // A large pattern's preview is rebuilt behind the progress card, between
-    // frames. Set while one is queued, so a burst of edits (typing a count)
-    // queues a single rebuild that reads the latest values.
-    bool m_patternUpdateQueued = false;
-    // Copies a pattern would make: (count - 1) per source body.
-    long patternCopyCount() const;
-    void updatePatternNow();
     PatternKind m_patternKind = PatternKind::Linear;
-    int m_patternBodyId = -1;            // primary source (first selected)
-    std::vector<int> m_patternBodyIds;   // every selected source body, in selection order
+    int m_patternBodyId = -1;
     int m_patternAxisIdx = 0; // 0=X, 1=Y, 2=Z (used when m_patternAxisId < 0)
     int m_patternAxisId = -1; // selected construction axis id; -1 = world axis
     int m_patternCount = 3;
@@ -2049,21 +1891,6 @@ private:
         TopoDS_Wire wire;
     };
     std::vector<LoftRail> m_loftRails;
-
-    // ── Sweep: closed profile sketch swept along a path sketch ──
-    // beginSweep sorts the selected sketches into profile and path, then one
-    // SweepOp is toggled against the document as a live preview (like Loft).
-    bool m_sweepActive = false;
-    int  m_sweepProfileSketch = -1;
-    int  m_sweepPathSketch = -1;
-    bool m_sweepPerpendicular = true;
-    std::string m_sweepFailure;               // why the preview could not be built
-    materializr::LiveOpPreview m_sweepPreview;
-    void beginSweep();
-    void updateSweep();
-    void commitSweep();
-    void cancelSweep();
-    void renderSweepPanel();
 
     void beginLoft();          // reads selection, snapshots wires, pushes initial preview
     void updateLoft();         // re-push preview with current params
@@ -2269,11 +2096,6 @@ private:
     gp_Ax1 m_planeOpAxis;
     gp_Pnt m_planeOpAxisPoint;
     bool   m_planeOpHaveCylinder = false;
-    // A selected body vertex: lets the XY/XZ/YZ/Parallel-to-face modes jump to
-    // the distance that puts the plane through that point ("Through selected
-    // point" in the popup).
-    bool   m_planeOpHavePoint = false;
-    gp_Pnt m_planeOpPoint;
     gp_Ax1 m_planeOpCylAxis;
     double m_planeOpCylRadius = 0.0;
     gp_Dir m_planeOpCylRefDir{1.0, 0.0, 0.0};
@@ -2348,7 +2170,6 @@ private:
     bool   m_primitivePopupActive = false;
     int    m_primitivePopupKind   = 0; // 0=Box,1=Cyl,2=Sphere,3=Cone,4=Torus
     double m_primitivePopupExtents[3]  = {10.0, 10.0, 10.0}; // box X/Y/Z
-    bool   m_primitiveUseDiameter      = false;               // radius fields read/typed as diameters
     double m_primitivePopupRadius      = 5.0;                 // cyl/sphere/cone bottom/torus major
     double m_primitivePopupHeight      = 10.0;                // cyl/cone
     double m_primitivePopupTopRadius   = 0.0;                 // cone tip
@@ -2447,7 +2268,7 @@ private:
     // when revolve is requested" logic stays in one place.
     void beginRevolve();
     void renderRevolvePopup();
-    bool applyRevolve();   // false = nothing applied; the popup stays up and says so
+    void applyRevolve();
     // Cancel / commit helpers - share the restore-original logic.
     void revolveLiveBegin();
     void revolveLiveApply(float angle);
@@ -2587,7 +2408,6 @@ private:
     std::set<int> m_sketchPatternLines;
     std::set<int> m_sketchPatternCircles;
     std::set<int> m_sketchPatternArcs;
-    std::set<int> m_sketchPatternSplines;
     bool          m_sketchPatternSelectAll = false; // whole-sketch fallback when nothing was selected
 
     void beginSketchPattern(PatternKind kind);

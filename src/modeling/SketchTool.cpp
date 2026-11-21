@@ -1,5 +1,4 @@
 #include "SketchTool.h"
-#include <iterator>
 #include "SketchConstraints.h"
 #include "TextSketchOp.h"
 #include "../touch_mode.h"
@@ -37,22 +36,7 @@ void SketchTool::setMode(SketchToolMode mode) {
     if (m_isPlacing) {
         onCancel();
     }
-    // Select a segment, THEN pick Offset: the tool offsets what was selected
-    // (just that, not the whole connected contour). Taken before the selection
-    // is dropped below. Re-picking Offset with nothing selected keeps whatever
-    // restriction is already standing.
-    if (mode == SketchToolMode::Offset && m_mode != SketchToolMode::Offset) {
-        std::set<int> sel(m_selectedLines);
-        sel.insert(m_selectedCircles.begin(), m_selectedCircles.end());
-        sel.insert(m_selectedArcs.begin(), m_selectedArcs.end());
-        sel.insert(m_selectedSplines.begin(), m_selectedSplines.end());
-        m_offsetOnly = std::move(sel);
-    } else if (mode != SketchToolMode::Offset) {
-        m_offsetOnly.clear();
-    }
-    const bool enteringOffset = mode == SketchToolMode::Offset && m_mode != SketchToolMode::Offset;
     m_mode = mode;
-    m_refHover.clear();
     // Leaving select/move: drop element highlights so they don't linger as
     // golden geometry once the user goes back to drawing.
     if (mode != SketchToolMode::Select) clearElementSelection();
@@ -70,13 +54,7 @@ void SketchTool::setMode(SketchToolMode mode) {
     m_rectDimStage = 0;
     m_rectDimH = 0.0f;
     m_mirrorActive = false; // switching tools aborts any in-progress mirror
-    m_polygonSpec.hasSize = false;   // typed polygon values do not outlive the tool
-    m_polygonSpec.hasAngle = false;
-    clearShapeSpec();                // ... nor do the line / circle / rectangle / arc ones
     cancelOffset();         // ... and any in-progress offset
-    // A selection made before choosing Offset IS the pick: go straight to the
-    // distance step instead of asking for the same elements to be clicked again.
-    if (enteringOffset && !m_offsetOnly.empty()) beginOffsetFromSelection();
     // Entering or leaving Dimension mode always starts a fresh pick sequence.
     clearDimState();
 }
@@ -94,7 +72,6 @@ void SketchTool::flagNewElements(int firstId) {
         case SketchToolMode::Arc:
         case SketchToolMode::Spline:
         case SketchToolMode::Polygon:
-        case SketchToolMode::Reference:
             m_sketch->setConstructionSince(firstId, true);
             break;
         default:
@@ -164,16 +141,6 @@ void SketchTool::onMouseDown(glm::vec2 pos, bool addToSel) {
         return;
     }
 
-    // Typed values from the panel (length, angle, width, height, chord, sweep /
-    // radius) take over the moving end of the placement; the click only says
-    // "now". Without any, the cursor rules, as it always did.
-    // A typed size of 0 cannot place anything: say so, keep the placement live.
-    if (m_isPlacing && typedSizeIsZero()) {
-        m_shapeRejection = "Size must be greater than 0.";
-        return;
-    }
-    if (m_isPlacing && m_shapeSpec.any() && commitTypedShape(snapped)) return;
-
     switch (m_mode) {
         case SketchToolMode::Select:
             handleSelectTool(snapped);
@@ -221,15 +188,6 @@ void SketchTool::onMouseDown(glm::vec2 pos, bool addToSel) {
         case SketchToolMode::Point:
             handlePointTool(snapped);
             break;
-        case SketchToolMode::Reference:
-            // Raw cursor, like Trim and Offset: the reference lines are what
-            // is being aimed at, so snapping first would only pull the pick.
-            handleReferenceTool(pos);
-            break;
-        case SketchToolMode::Corner:
-            // Raw cursor too: it picks an existing vertex, it places nothing.
-            handleCornerTool(pos);
-            break;
         default:
             break;
     }
@@ -242,72 +200,6 @@ void SketchTool::onMouseDown(glm::vec2 pos, bool addToSel) {
         const int pid = findCoincidentPoint(snapped, -1);
         if (pid >= 0) m_sketch->setPointOnCurve(pid, m_snapRimId);
     }
-    // A drag just began: baseline the snapped cursor with the DRAG's snap (the
-    // hover before the press snapped differently - inference, no exclusion), or
-    // the geometry would jump by the difference on its first move.
-    if (m_mode == SketchToolMode::Select && m_isDragging && m_dragNeedsBaseline) {
-        const std::set<int> dp = dragPoints();
-        m_currentPos = dragAwareSnap(pos, dp);
-        // A single dragged point keeps the offset it was grabbed at (see onMouseMove).
-        m_dragGrab = glm::vec2(0.0f);
-        if (dp.size() == 1)
-            if (const SketchPoint* gp = m_sketch->getPoint(*dp.begin()))
-                m_dragGrab = gp->pos - m_currentPos;
-        m_activeInferences.clear();
-    }
-    m_dragNeedsBaseline = false;
-}
-
-namespace {
-// Alignment-to-another-point's-X/Y band while moving a single point, in screen px.
-constexpr float kAlignPx = 6.0f;
-}
-
-// The points a Select drag is moving (the same set the drag in onMouseMove moves).
-std::set<int> SketchTool::dragPoints() const {
-    std::set<int> pts;
-    if (m_mode != SketchToolMode::Select || !m_isDragging || !m_sketch) return pts;
-    pts = m_selectedPoints;
-    for (int lid : m_selectedLines) {
-        for (const auto& l : m_sketch->getLines()) {
-            if (l.id == lid) {
-                pts.insert(l.startPointId);
-                pts.insert(l.endPointId);
-                break;
-            }
-        }
-    }
-    if (pts.empty() && m_dragPointId >= 0) pts.insert(m_dragPointId);
-    return pts;
-}
-
-// The cursor snap for the current gesture. Worked out knowing what is being
-// dragged: the dragged geometry sits at the cursor, so snapping without that let
-// it snap onto ITSELF - with grid snap off the first ~0.25 mm of every slow drag
-// was swallowed (then it caught up in a jump, worst when zoomed in).
-glm::vec2 SketchTool::dragAwareSnap(glm::vec2 pos, const std::set<int>& dragPts) {
-    if (dragPts.size() > 1) {
-        // A line / selection moves rigidly by the CURSOR's travel. Pulling the
-        // cursor onto some unrelated endpoint would jump the whole selection by an
-        // arbitrary amount, so the grid is the only thing that snaps it
-        // (inference Off keeps grid only - see snap()).
-        const InferenceLevel keep = m_inferenceLevel;
-        m_inferenceLevel = InferenceLevel::Off;
-        const glm::vec2 r = snap(pos);
-        m_inferenceLevel = keep;
-        return r;
-    }
-    if (dragPts.size() == 1) {
-        // The cursor only gets the grid here: the point's own landing spot is what
-        // the inference (point snaps, alignment, symmetry) acts on, further down in
-        // onMouseMove. Pulling the cursor as well counted every inference twice.
-        const InferenceLevel keep = m_inferenceLevel;
-        m_inferenceLevel = InferenceLevel::Off;
-        const glm::vec2 r = snap(pos);
-        m_inferenceLevel = keep;
-        return r;
-    }
-    return snap(pos);
 }
 
 void SketchTool::onMouseMove(glm::vec2 pos) {
@@ -322,18 +214,6 @@ void SketchTool::onMouseMove(glm::vec2 pos) {
         m_activeInferences.clear();
         return;
     }
-    if (m_mode == SketchToolMode::Reference) {
-        m_currentPos = pos;
-        m_activeInferences.clear();
-        updateReferenceHover(pos);
-        return;
-    }
-    if (m_mode == SketchToolMode::Corner) {
-        m_currentPos = pos;
-        m_activeInferences.clear();
-        m_cornerHover = pickCornerPoint(pos);
-        return;
-    }
     // Offset: the Pick phase hit-tests with the RAW cursor (as Trim does), the
     // Distance phase measures from the SNAPPED one so grid snap quantises the
     // distance to whole increments.
@@ -343,14 +223,13 @@ void SketchTool::onMouseMove(glm::vec2 pos) {
             updateOffsetHover(pos);
         } else {
             m_currentPos = snap(pos);
-            if (!m_offsetLocked) updateOffsetDistance(m_currentPos);
+            updateOffsetDistance(m_currentPos);
         }
         return;
     }
     // Trim uses the raw cursor for picking; snapping would pull the click toward
     // unrelated nearby targets and pick the wrong element.
-    const std::set<int> dragPts = dragPoints();
-    glm::vec2 newPos = (m_mode == SketchToolMode::Trim) ? pos : dragAwareSnap(pos, dragPts);
+    glm::vec2 newPos = (m_mode == SketchToolMode::Trim) ? pos : snap(pos);
     // Select/move only manipulates existing geometry - inference guides are
     // visual noise here. Keep the snapped position (handy when dragging an
     // element onto a grid point/endpoint) but drop the guide markers.
@@ -406,7 +285,17 @@ void SketchTool::onMouseMove(glm::vec2 pos) {
     // Drag the active selection (or the single dragged point if no broader
     // selection exists) by the cursor delta each frame.
     if (m_isDragging && m_sketch) {
-        const std::set<int>& pts = dragPts;
+        std::set<int> pts = m_selectedPoints;
+        for (int lid : m_selectedLines) {
+            for (const auto& l : m_sketch->getLines()) {
+                if (l.id == lid) {
+                    pts.insert(l.startPointId);
+                    pts.insert(l.endPointId);
+                    break;
+                }
+            }
+        }
+        if (pts.empty() && m_dragPointId >= 0) pts.insert(m_dragPointId);
 
         // When a single point is being dragged, run inference snap on its
         // target position so endpoint / midpoint / on-line / axis-from-point
@@ -424,12 +313,7 @@ void SketchTool::onMouseMove(glm::vec2 pos) {
             // the cursor to actually travel before the magnet engages.
             if (p && delta != glm::vec2(0.0f)) {
                 m_snapExcludePoints = pts;
-                // Where the point WANTS to be: the cursor plus the fixed offset it
-                // was grabbed at - not "where it is now + this frame's travel".
-                // The relative form carried every pull (alignment, point snap)
-                // forward as a permanent offset, so pulls piled up and a point
-                // that had been pulled never came back to the cursor.
-                glm::vec2 target = newPos + m_dragGrab;
+                glm::vec2 target = p->pos + delta;
                 glm::vec2 inferred = snap(target);
                 m_snapExcludePoints.clear();
                 // A point already stuck to a rim rides it; snap()'s answer only
@@ -501,7 +385,6 @@ void SketchTool::onConfirm() {
     m_activeInferences.clear();
     m_rectDimStage = 0;
     m_rectDimH = 0.0f;
-    clearShapeSpec();
 }
 
 void SketchTool::onCancel() {
@@ -783,21 +666,15 @@ glm::vec2 SketchTool::getPreviewStart() const {
     // (centre, rim) and the rectangle's (corner, opposite corner). Return the
     // EFFECTIVE start for the active draw mode so both visuals match what the
     // click will actually create - no renderer changes needed.
-    if (m_mode == SketchToolMode::Rectangle) {
-        glm::vec2 c[4];
-        if (rectResolve(m_currentPos, c)) return c[0];
-    }
+    if (m_mode == SketchToolMode::Rectangle && m_rectMode == RectMode::Center)
+        return 2.0f * m_firstClick - m_currentPos; // opposite corner
     if (m_mode == SketchToolMode::Circle && m_circleMode == CircleMode::TwoPoint)
-        return 0.5f * (m_firstClick + shapeResolve(m_currentPos)); // diameter midpoint = centre
+        return 0.5f * (m_firstClick + m_currentPos); // diameter midpoint = centre
     return m_firstClick;
 }
 
 glm::vec2 SketchTool::getPreviewEnd() const {
-    if (m_mode == SketchToolMode::Rectangle) {
-        glm::vec2 c[4];
-        if (rectResolve(m_currentPos, c)) return c[2];
-    }
-    return shapeResolve(m_currentPos);
+    return m_currentPos;
 }
 
 SketchToolMode SketchTool::getPreviewType() const {
@@ -933,7 +810,7 @@ void SketchTool::updateHoverCharge(double tNow, glm::vec2 cursor) {
     // charged it at coarse grid steps (zoomed out) - "latching to edges I
     // never hovered". Charging is a deliberate act: tighter catch, and the
     // linger tolerance below is a small fraction of a cell.
-    const float band = pickTol(0.6f, 0.4f);
+    const float band = std::max(0.4f, tolStep() * 0.6f);
     ChargedRef best;
     float bestD = band;
     for (const auto& pt : m_sketch->getPoints()) {
@@ -993,7 +870,7 @@ void SketchTool::updateHoverCharge(double tNow, glm::vec2 cursor) {
     // and same sourceId; FacePoint and FaceLineMid match by position
     // since they have no id.
     const double dwell = 0.30;
-    const float  moveTol = pickTol(0.25f, 0.25f);
+    const float  moveTol = std::max(0.25f, tolStep() * 0.25f);
     bool sameCandidate =
         m_hoverCandidate.kind == best.kind &&
         ((best.sourceId >= 0 && m_hoverCandidate.sourceId == best.sourceId) ||
@@ -1087,23 +964,8 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
     //   allowDirectional - perp/parallel-to-prev, angle, on-line-extension,
     //                      tangent, axis-from-point. ON for both Full & Reduced.
     //   allowCharge      - hover-to-charge references (Full only).
-    // MOVING existing geometry (the Select tool dragging points / lines): only
-    // the point snaps - endpoints, midpoints, centres, and the axis-aligned
-    // symmetry suggestion - apply. Alignment to any other point's X / Y, on-line,
-    // line extensions, rim and the directional guides are for PLACING something
-    // new. In a drag they pulled the cursor with no guide drawn (Select mode drops
-    // the markers), so on a busy sketch a free move felt stuck to the grid even
-    // with Snap to grid off (tester list 11-14-26, item 3).
-    const bool moving = (m_mode == SketchToolMode::Select);
-    // ...plus ONE thing that IS useful while moving a single point: lining it up
-    // with another point's X or Y (level this vertex with that one). Single-point
-    // drags only (m_snapExcludePoints is set just for those), Full / Max only, on
-    // a tight pixel-sized band, and the guide is drawn so you can see what grabbed.
-    const bool moveAlign = moving && !m_snapExcludePoints.empty() &&
-                           (m_inferenceLevel == InferenceLevel::Full ||
-                            m_inferenceLevel == InferenceLevel::Max);
     const bool allowSnaps       = (m_inferenceLevel != InferenceLevel::Off);
-    const bool allowDirectional = (m_inferenceLevel != InferenceLevel::Off) && !moving;
+    const bool allowDirectional = (m_inferenceLevel != InferenceLevel::Off);
     const bool allowCharge      = (m_inferenceLevel == InferenceLevel::Full ||
                                    m_inferenceLevel == InferenceLevel::Max);
 
@@ -1193,7 +1055,6 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
     }
     const auto& circles = m_sketch->getCircles();
     for (const auto& c : circles) {
-        if (moving) break;
         const SketchPoint* center = m_sketch->getPoint(c.centerPointId);
         if (!center) continue;
         glm::vec2 v = pos - center->pos;
@@ -1223,7 +1084,6 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
     }
     const auto& arcs = m_sketch->getArcs();
     for (const auto& a : arcs) {
-        if (moving) break;
         const SketchPoint* center = m_sketch->getPoint(a.centerPointId);
         const SketchPoint* spt   = m_sketch->getPoint(a.startPointId);
         const SketchPoint* ept   = m_sketch->getPoint(a.endPointId);
@@ -1278,7 +1138,7 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
     // Face-reference circular / arc edges - continuous perimeter snapping for
     // in-plane host/neighbour circles (hole rims, fillet arcs). Mirrors the
     // sketch-circle behaviour: grid wins ties; never fires when inference is Off.
-    if (m_inferenceLevel != InferenceLevel::Off && !moving) {
+    if (m_inferenceLevel != InferenceLevel::Off) {
         const float TWO_PI = 2.0f * static_cast<float>(M_PI);
         for (const auto& fc : m_sketch->getFaceReferences().circles) {
             glm::vec2 v = pos - fc.center;
@@ -1541,12 +1401,7 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
     // snap above: with grid snap on, an absolute 0.2 mm floor would fire a
     // horizontal/vertical guide off a point within 0.2 mm on a fine grid,
     // hijacking the cursor within one increment. Tie it to the grid instead.
-    float axisThresh         = (gridActive ? tolStep() * 0.3f : 0.2f);
-    // Moving a point: a few SCREEN pixels, never more than the band above. A band
-    // in millimetres is huge when zoomed in and tiny zoomed out; pixels feel the
-    // same at every zoom, and on a busy sketch a wider one is a magnet everywhere.
-    if (moveAlign && m_mmPerPixel > 0.0f)
-        axisThresh = std::min(axisThresh, kAlignPx * m_mmPerPixel);
+    const float axisThresh   = (gridActive ? tolStep() * 0.3f : 0.2f);
     // Unlike point-to-point snapping above, this band is testing distance to
     // a CURVE, not to a small set of discrete candidate points - there's no
     // "other nearby line" to confuse it with in the way a second nearby point
@@ -1576,7 +1431,7 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
 
     // On-line: cursor's perpendicular projection lands within an existing
     // sketch segment.
-    if (allowSnaps && !moving) {
+    if (allowSnaps) {
         for (const auto& ln : lines) {
             // fromText (SVG-import / Text-tool) segments ARE valid on-edge
             // targets: landing a point on an imported outline is how you anchor
@@ -1700,7 +1555,7 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
     const bool preStartAxis =
         !m_isPlacing && (m_inferenceLevel == InferenceLevel::Full ||
                          m_inferenceLevel == InferenceLevel::Max);
-    if (allowDirectional || moveAlign) {
+    if (allowDirectional) {
         for (const auto& pt : m_sketch->getPoints()) {
             if (m_snapExcludePoints.count(pt.id)) continue;
             if (pt.fromText) continue;
@@ -2217,24 +2072,6 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
     auto axisAligned = [](glm::vec2 d) {
         return std::abs(d.x) < 1e-4f || std::abs(d.y) < 1e-4f;
     };
-    // An axis-from-point guide is a claim about ONE coordinate: "same X as that
-    // point" / "same Y". Rounding both coordinates to the lattice kept the point
-    // on the ray only when the source point itself sat on the lattice; for a
-    // point drawn with grid snap off (or on another step) the result slid up to
-    // half a step sideways while the guide kept saying "On Vertical Axis" - so
-    // the label was true of the cursor, not of the placed point (tester,
-    // 11-14-26). The anchor's coordinate stays EXACT; only the free one goes to
-    // the grid.
-    auto isAxisFromPoint = [](InferenceGuide::Kind k) {
-        return k == InferenceGuide::AxisHFromPoint ||
-               k == InferenceGuide::AxisVFromPoint;
-    };
-    auto latticeAlongAxis = [&](const LineCand& c, glm::vec2 p) {
-        if (!m_snapToGridEnabled || m_gridStep <= 0.0f) return p;
-        if (c.kind == InferenceGuide::AxisVFromPoint)
-            return glm::vec2(c.anchor.x, std::round(p.y / m_gridStep) * m_gridStep);
-        return glm::vec2(std::round(p.x / m_gridStep) * m_gridStep, c.anchor.y);
-    };
 
     // Intersection cap is WIDER than the single-line posCap: each cand only
     // enters the list after passing its own perpDist tolerance, so a two-cand
@@ -2323,21 +2160,11 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
         // vertex - leave it exactly where the geometry puts it.
         const bool ci = isContact(cands[bestI].kind);
         const bool cj = isContact(cands[bestJ].kind);
-        const bool ai = isAxisFromPoint(cands[bestI].kind);
-        const bool aj = isAxisFromPoint(cands[bestJ].kind);
-        if ((ai || aj) && !(ci || cj)) {
-            // Axis-from-point x anything: the crossing already satisfies both
-            // claims exactly. Rounding it to the lattice would break the axis
-            // one whenever the source point is off the lattice, so leave it.
-        } else if (!ci && !cj) {
+        if (!ci && !cj) {
             // Only when BOTH rays are axis-aligned; otherwise rounding the
             // crossing breaks the very directions that defined it.
             if (axisAligned(cands[bestI].dir) && axisAligned(cands[bestJ].dir))
                 bestIsect = onLattice(bestIsect);
-        } else if (ci != cj && (ai || aj)) {
-            // Edge landing + exact axis guide: the intersection is on the edge
-            // AND exactly aligned. Walking it along the edge to the grid
-            // (below) drags it off the axis - keep it.
         } else if (ci != cj) {
             const auto& con = ci ? cands[bestI] : cands[bestJ];
             // See LineCand::exactDirection: a spline contact's `dir` is only
@@ -2393,10 +2220,7 @@ glm::vec2 SketchTool::snap(glm::vec2 pos) const {
         glm::vec2 snapped = c.exactDirection
             ? gridAlongLine(c.anchor, c.dir, c.isSegment, c.segLen, c.proj)
             : c.proj;
-        if (isAxisFromPoint(c.kind))
-            snapped = latticeAlongAxis(c, snapped);
-        else if (!isContact(c.kind) && axisAligned(c.dir))
-            snapped = onLattice(snapped);
+        if (!isContact(c.kind) && axisAligned(c.dir)) snapped = onLattice(snapped);
         emitWithSnap(c, snapped);
         // Preserve a borrowed direction (parallel/perp/tangent/on-line) exactly;
         // only flatten genuinely free near-axis results.
@@ -2506,16 +2330,12 @@ int SketchTool::findCoincidentPoint(glm::vec2 pos, int excludeId) const {
     // (304.8-based vs 1-based), the closing click snaps elsewhere, and 0.3 mm
     // cannot bridge the gap: "I can't close out a sketch to extrude."
     //
-    // Same shape as tolStep()'s screen term. The 0.3 mm floor keeps the radius
-    // sane on the first frame, before the viewport has pushed a scale - but once
-    // there is one it is capped in pixels too: left at 0.3 mm it was hundreds of
-    // pixels at the deepest zoom, and a click ANYWHERE in the window picked the
-    // nearest point (11-3-26).
-    float floorMm = 0.3f;
-    if (m_mmPerPixel > 0.0f) floorMm = std::min(floorMm, kPickFloorPx * m_mmPerPixel);
+    // Same shape as tolStep()'s screen term, and the 0.3 mm stays as a floor so
+    // a deeply zoomed-in view keeps its old precision (and so the radius is
+    // still sane on the first frame, before the viewport has pushed a scale).
     const float threshold =
-        std::max(floorMm, std::min(kWeldRadiusPx * m_mmPerPixel,
-                                   kWeldRadiusCapMm)) * snapScale();
+        std::max(0.3f, std::min(kWeldRadiusPx * m_mmPerPixel,
+                                kWeldRadiusCapMm)) * snapScale();
     // Return the NEAREST point within the radius, not the first one found. On
     // dense or small-scale geometry (e.g. an SVG imported small, whose spline
     // control points sit within the weld radius of each other) "first in range"
@@ -2569,17 +2389,11 @@ void SketchTool::handleSelectTool(glm::vec2 pos) {
     int nearCircle = -1;
     int nearArc = -1;
     int nearSpline = -1;
-    const float tol = pickTol(0.5f, 0.5f) * snapScale(); // sketch units (wider on touch)
+    const float tol = std::max(tolStep() * 0.5f, 0.5f) * snapScale(); // sketch units (wider on touch)
     if (nearPt < 0) {
-        // Line segments. Lines drawn on top of one another sit at the same
-        // distance from the click, so the nearest one is a coin toss that always
-        // landed on whichever was created first. Among the equally-near ones a
-        // construction line wins (the one more often moved or deleted), and a
-        // repeat click at the same spot walks on to the next of them.
-        struct LineHit { int id; float d; bool construction; };
-        std::vector<LineHit> hits;
-        const auto& lines = m_sketch->getLines();
+        // Line segments.
         float bestD = 0.0f;
+        const auto& lines = m_sketch->getLines();
         for (const auto& l : lines) {
             const SketchPoint* a = m_sketch->getPoint(l.startPointId);
             const SketchPoint* b = m_sketch->getPoint(l.endPointId);
@@ -2590,30 +2404,10 @@ void SketchTool::handleSelectTool(glm::vec2 pos) {
             float t = glm::clamp(glm::dot(pos - a->pos, ab) / len2, 0.0f, 1.0f);
             glm::vec2 proj = a->pos + ab * t;
             float d = glm::distance(proj, pos);
-            if (d >= tol) continue;
-            if (hits.empty() || d < bestD) bestD = d;
-            hits.push_back({l.id, d, l.isConstruction});
-        }
-        const float tie = std::max(tol * 0.05f, 1e-4f);
-        hits.erase(std::remove_if(hits.begin(), hits.end(),
-                       [&](const LineHit& h) { return h.d > bestD + tie; }),
-                   hits.end());
-        std::stable_sort(hits.begin(), hits.end(),
-                         [](const LineHit& x, const LineHit& y) {
-                             return x.construction && !y.construction;
-                         });
-        if (!hits.empty()) {
-            size_t pick = 0;
-            if (hits.size() > 1 && m_lastLinePickId >= 0 &&
-                glm::distance(pos, m_lastLinePickPos) < tol * 0.5f) {
-                for (size_t i = 0; i < hits.size(); ++i)
-                    if (hits[i].id == m_lastLinePickId) { pick = (i + 1) % hits.size(); break; }
+            if (d < tol && (nearLine < 0 || d < bestD)) {
+                nearLine = l.id;
+                bestD = d;
             }
-            nearLine = hits[pick].id;
-            m_lastLinePickId = nearLine;
-            m_lastLinePickPos = pos;
-        } else {
-            m_lastLinePickId = -1;
         }
         // Circle / arc perimeters - only consulted when no line landed.
         if (nearLine < 0) {
@@ -2630,10 +2424,12 @@ void SketchTool::handleSelectTool(glm::vec2 pos) {
             }
             float bestArcD = 0.0f;
             for (const auto& a : m_sketch->getArcs()) {
-                if (!m_sketch->getPoint(a.centerPointId)) continue;
-                // Distance to the arc itself, not the circle it was cut from:
-                // an arc used to be hittable anywhere along that circle (#183).
-                float d = m_sketch->distanceToArc(a, pos);
+                const SketchPoint* center = m_sketch->getPoint(a.centerPointId);
+                if (!center) continue;
+                // Approximate as full-circle perimeter - picking on the arc's
+                // sweep range is overkill for selection feel.
+                float d = std::abs(glm::distance(pos, center->pos) -
+                                   static_cast<float>(a.radius));
                 if (d < tol && (nearArc < 0 || d < bestArcD)) {
                     nearArc = a.id;
                     bestArcD = d;
@@ -2682,7 +2478,6 @@ void SketchTool::handleSelectTool(glm::vec2 pos) {
         m_selectedPoints.insert(nearPt);
         m_dragPointId = nearPt;
         m_isDragging = true; // multi-point drag handled in onMouseMove
-        m_dragNeedsBaseline = true;
     } else if (nearLine >= 0) {
         if (m_lastDownAddedToSel) {
             // Ctrl+click on a line: toggle.
@@ -2691,7 +2486,6 @@ void SketchTool::handleSelectTool(glm::vec2 pos) {
         } else {
             m_selectedLines.insert(nearLine);
             m_isDragging = true; // dragging the line translates the whole selection
-            m_dragNeedsBaseline = true;
         }
     } else if (nearCircle >= 0) {
         if (m_lastDownAddedToSel) {
@@ -2914,7 +2708,7 @@ float SketchTool::rimBreakBand(bool wholeSelection) const {
     // the rim through any normal repositioning and only lets go if the line is
     // hauled somewhere else entirely. Dragging the point alone gets a tight one,
     // so a deliberate pull detaches immediately.
-    const float tight = pickTol(0.75f, 0.5f) * snapScale();
+    const float tight = std::max(tolStep() * 0.75f, 0.5f) * snapScale();
     return wholeSelection ? std::max(tight * 8.0f, 4.0f * tolStep()) : tight;
 }
 
@@ -4353,7 +4147,7 @@ void applyTrim(Sketch& sketch, const TrimAction& a) {
 
 void SketchTool::handleTrimTool(glm::vec2 pos) {
     if (!m_sketch) return;
-    float threshold = pickTol(0.5f, 0.3f);
+    float threshold = std::max(0.3f, tolStep() * 0.5f);
     TrimAction a = planTrim(*m_sketch, pos, threshold);
     if (!a.valid()) return;
     applyTrim(*m_sketch, a);
@@ -4366,306 +4160,9 @@ void SketchTool::handleTrimTool(glm::vec2 pos) {
 void SketchTool::computeTrimHover(glm::vec2 pos) {
     m_trimHoverPoints.clear();
     if (!m_sketch) return;
-    float threshold = pickTol(0.5f, 0.3f);
+    float threshold = std::max(0.3f, tolStep() * 0.5f);
     TrimAction a = planTrim(*m_sketch, pos, threshold);
     if (a.valid()) densifyTrimPreview(*m_sketch, a, m_trimHoverPoints);
-}
-
-void SketchTool::polygonResolve(glm::vec2 centre, glm::vec2 cursor, float& circumRadius,
-                                float& rotationRad) const {
-    const glm::vec2 delta = cursor - centre;
-    circumRadius = glm::length(delta);
-    rotationRad = (circumRadius > 1e-6f) ? std::atan2(delta.y, delta.x) : 0.0f;
-    const PolygonSpec& sp = m_polygonSpec;
-    // Inscribed: the cursor marks the middle of a SIDE (where the inscribed
-    // circle touches), not a corner, so it is the grid-snapped point and the
-    // inscribed radius is the round number. The corner circle is then
-    // radius / cos(pi / sides), half a side's angle round from the cursor.
-    if (sp.inscribed && circumRadius > 1e-6f) {
-        const double half = M_PI / std::max(m_polygonSides, 3);
-        circumRadius = static_cast<float>(circumRadius / std::cos(half));
-        rotationRad -= static_cast<float>(half);
-    }
-    if (sp.hasSize && sp.size > 0.0) {
-        const double radius = sp.diameter ? sp.size * 0.5 : sp.size;
-        // The inscribed circle touches the sides: its radius is the corner
-        // radius times cos(pi / sides).
-        const double k = sp.inscribed ? std::cos(M_PI / std::max(m_polygonSides, 3)) : 1.0;
-        circumRadius = static_cast<float>(radius / k);
-    }
-    if (sp.hasAngle) rotationRad = static_cast<float>(sp.angleDeg * M_PI / 180.0);
-}
-
-double SketchTool::polygonSizeFor(double circumRadius) const {
-    const double k = m_polygonSpec.inscribed ? std::cos(M_PI / std::max(m_polygonSides, 3)) : 1.0;
-    return circumRadius * k * (m_polygonSpec.diameter ? 2.0 : 1.0);
-}
-
-bool SketchTool::typedSizeIsZero() const {
-    if (!m_isPlacing) return false;
-    const ShapeSpec& sp = m_shapeSpec;
-    switch (m_mode) {
-        case SketchToolMode::Polygon:   return m_polygonSpec.hasSize && m_polygonSpec.size <= 0.0;
-        case SketchToolMode::Line:      return sp.hasLen && sp.len <= 0.0;
-        case SketchToolMode::Circle:    return sp.hasLen && sp.len <= 0.0;
-        case SketchToolMode::Rectangle: return (sp.hasW && sp.w <= 0.0) || (sp.hasH && sp.h <= 0.0);
-        case SketchToolMode::Arc:
-            if (m_clickCount == 1) return sp.hasLen && sp.len <= 0.0;
-            // A radius of 0 is no arc; a sweep of 0 is already clamped to 0.1.
-            return m_clickCount == 2 && m_arcDimMode == ArcDimMode::Radius &&
-                   sp.hasApex && sp.apex <= 0.0;
-        default: return false;
-    }
-}
-
-bool SketchTool::commitPolygonNow() {
-    if (m_mode != SketchToolMode::Polygon || !m_isPlacing || !m_sketch) return false;
-    if (typedSizeIsZero()) { m_shapeRejection = "Size must be greater than 0."; return false; }
-    const size_t before = m_sketch->getPolygons().size();
-    handlePolygonTool(m_currentPos);
-    return m_sketch->getPolygons().size() > before;
-}
-
-namespace {
-constexpr double kDeg2Rad = M_PI / 180.0;
-}
-
-glm::vec2 SketchTool::shapeResolve(glm::vec2 cursor) const {
-    const ShapeSpec& sp = m_shapeSpec;
-    if (!m_isPlacing || !sp.any()) return cursor;
-    const glm::vec2 anchor = m_firstClick;
-    const glm::vec2 d = cursor - anchor;
-    const double curLen = glm::length(d);
-    const double curAng = (curLen > 1e-9) ? std::atan2(d.y, d.x) : 0.0;
-    switch (m_mode) {
-        case SketchToolMode::Line: {
-            const double L = sp.hasLen ? sp.len : curLen;
-            const double a = sp.hasAngle ? sp.angleDeg * kDeg2Rad : curAng;
-            if (!sp.hasLen && !sp.hasAngle) return cursor;
-            return anchor + glm::vec2(static_cast<float>(std::cos(a) * L),
-                                      static_cast<float>(std::sin(a) * L));
-        }
-        case SketchToolMode::Circle: {
-            if (!sp.hasLen) return cursor;
-            // Centre mode: the rim is a radius from the click. Two-point mode:
-            // the click is one end of a diameter, so the far end is a diameter
-            // away. The typed value is a radius or a diameter per the switch.
-            const double radius = m_circleDiameter ? sp.len * 0.5 : sp.len;
-            const double reach = (m_circleMode == CircleMode::TwoPoint) ? radius * 2.0 : radius;
-            return anchor + glm::vec2(static_cast<float>(std::cos(curAng) * reach),
-                                      static_cast<float>(std::sin(curAng) * reach));
-        }
-        case SketchToolMode::Rectangle: {
-            glm::vec2 c[4];
-            return rectResolve(cursor, c) ? c[2] : cursor;
-        }
-        case SketchToolMode::Arc: {
-            if (m_clickCount == 1) {
-                if (!sp.hasLen) return cursor;
-                return anchor + glm::vec2(static_cast<float>(std::cos(curAng) * sp.len),
-                                          static_cast<float>(std::sin(curAng) * sp.len));
-            }
-            if (m_clickCount != 2 || !sp.hasApex) return cursor;
-            const glm::vec2 A = m_firstClick, B = m_secondClick;
-            const glm::vec2 chord = B - A;
-            const float L = glm::length(chord);
-            if (L < 1e-4f) return cursor;
-            const glm::vec2 chordDir = chord / L;
-            glm::vec2 perp(-chordDir.y, chordDir.x);
-            const glm::vec2 M = 0.5f * (A + B);
-            if (glm::dot(cursor - M, perp) < 0.0f) perp = -perp;
-            // The same relations applyDimension uses, so typing a value in the
-            // panel and typing it in the old popup land on the same arc.
-            float dist = 0.0f;
-            if (m_arcDimMode == ArcDimMode::Sweep) {
-                const float deg = glm::clamp(static_cast<float>(sp.apex), 0.1f, 359.9f);
-                dist = (L * 0.5f) * std::tan(deg * static_cast<float>(M_PI) / 180.0f * 0.25f);
-            } else {
-                // Under half the chord no arc exists; clamp to the semicircle
-                // rather than refuse, so the preview never vanishes mid-typing.
-                const float half = L * 0.5f;
-                const float R = std::max(static_cast<float>(sp.apex), half);
-                dist = R - std::sqrt(std::max(0.0f, R * R - half * half));
-            }
-            return M + perp * dist;
-        }
-        default:
-            return cursor;
-    }
-}
-
-bool SketchTool::rectResolve(glm::vec2 cursor, glm::vec2 out[4]) const {
-    if (m_mode != SketchToolMode::Rectangle || !m_isPlacing) return false;
-    const ShapeSpec& sp = m_shapeSpec;
-    const glm::vec2 anchor = m_firstClick;
-    const bool center = (m_rectMode == RectMode::Center);
-    if (!sp.hasAngle && !sp.hasW && !sp.hasH) {
-        // The classic axis-aligned rectangle straight from the cursor.
-        const glm::vec2 c0 = center ? 2.0f * anchor - cursor : anchor;
-        out[0] = c0;
-        out[1] = glm::vec2(cursor.x, c0.y);
-        out[2] = cursor;
-        out[3] = glm::vec2(c0.x, cursor.y);
-        return true;
-    }
-    const double th = sp.hasAngle ? sp.angleDeg * kDeg2Rad : 0.0;
-    const glm::vec2 u(static_cast<float>(std::cos(th)), static_cast<float>(std::sin(th)));
-    const glm::vec2 v(-u.y, u.x);
-    const glm::vec2 d = cursor - anchor;
-    // In centre mode the cursor is a CORNER, half the side from the centre.
-    const float k = center ? 2.0f : 1.0f;
-    const float wm = glm::dot(d, u) * k, hm = glm::dot(d, v) * k;
-    const float sw = (wm < 0.0f) ? -1.0f : 1.0f, sh = (hm < 0.0f) ? -1.0f : 1.0f;
-    const float W = sw * static_cast<float>(sp.hasW ? sp.w : std::fabs(wm));
-    const float H = sh * static_cast<float>(sp.hasH ? sp.h : std::fabs(hm));
-    const glm::vec2 c0 = center ? anchor - (u * W + v * H) * 0.5f : anchor;
-    out[0] = c0;
-    out[1] = c0 + u * W;
-    out[2] = c0 + u * W + v * H;
-    out[3] = c0 + v * H;
-    return true;
-}
-
-SketchTool::ShapeNow SketchTool::shapeMeasure() const {
-    ShapeNow n;
-    if (!m_isPlacing) return n;
-    const glm::vec2 d = m_currentPos - m_firstClick;
-    const double L = glm::length(d);
-    n.len = L;
-    n.angleDeg = (L > 1e-9) ? std::atan2(d.y, d.x) / kDeg2Rad : 0.0;
-    if (n.angleDeg < 0.0) n.angleDeg += 360.0;
-    if (m_mode == SketchToolMode::Circle) {
-        const double reach = (m_circleMode == CircleMode::TwoPoint) ? L * 0.5 : L;   // radius
-        n.len = m_circleDiameter ? reach * 2.0 : reach;
-    } else if (m_mode == SketchToolMode::Rectangle) {
-        // Measured on the SAME frame the spec would place it in, minus the typed
-        // fields, so a field still following the cursor shows what it would do.
-        const double th = m_shapeSpec.hasAngle ? m_shapeSpec.angleDeg * kDeg2Rad : 0.0;
-        const glm::vec2 u(static_cast<float>(std::cos(th)), static_cast<float>(std::sin(th)));
-        const glm::vec2 v(-u.y, u.x);
-        const double k = (m_rectMode == RectMode::Center) ? 2.0 : 1.0;
-        n.w = std::fabs(glm::dot(d, u)) * k;
-        n.h = std::fabs(glm::dot(d, v)) * k;
-        n.angleDeg = m_shapeSpec.hasAngle ? m_shapeSpec.angleDeg : 0.0;
-    } else if (m_mode == SketchToolMode::Arc && m_clickCount == 2) {
-        const glm::vec2 A = m_firstClick, B = m_secondClick;
-        const glm::vec2 chord = B - A;
-        const double cl = glm::length(chord);
-        n.len = cl;
-        if (cl > 1e-6) {
-            glm::vec2 perp(-chord.y / static_cast<float>(cl), chord.x / static_cast<float>(cl));
-            const glm::vec2 M = 0.5f * (A + B);
-            const double sag = std::fabs(glm::dot(m_currentPos - M, perp));
-            // Sweep from the sagitta: tan(theta / 4) = sag / (chord / 2).
-            const double sweepDeg = 4.0 * std::atan2(sag, cl * 0.5) / kDeg2Rad;
-            const double R = (sag > 1e-9) ? ((cl * cl) / 4.0 + sag * sag) / (2.0 * sag) : 0.0;
-            n.apex = (m_arcDimMode == ArcDimMode::Sweep) ? sweepDeg : R;
-        }
-    }
-    return n;
-}
-
-void SketchTool::addLineDistanceConstraint(int aId, int bId, double value) {
-    if (!m_sketch) return;
-    // One Distance constraint per segment: drop any prior one on this pair so
-    // repeated refinements don't stack duplicates.
-    for (const auto& c : m_sketch->getConstraints())
-        if (c.type == ConstraintType::Distance &&
-            ((c.entityA == aId && c.entityB == bId) ||
-             (c.entityA == bId && c.entityB == aId)))
-            m_sketch->removeConstraint(c.id);
-    Constraint c;
-    c.id = 0;
-    c.type = ConstraintType::Distance;
-    c.entityA = aId;
-    c.entityB = bId;
-    c.value = value;
-    c.isSatisfied = true;
-    m_sketch->addConstraint(c);
-}
-
-bool SketchTool::commitTypedShape(glm::vec2 cursor) {
-    if (!m_sketch || !m_isPlacing || !m_shapeSpec.any()) return false;
-    NewElementGuard newElements(*this, m_sketch);
-    const ShapeSpec sp = m_shapeSpec;
-    const glm::vec2 end = shapeResolve(cursor);
-    switch (m_mode) {
-        case SketchToolMode::Line: {
-            const size_t before = m_sketch->getLines().size();
-            handleLineTool(end);
-            if (sp.hasLen && m_sketch->getLines().size() > before) {
-                const auto& l = m_sketch->getLines().back();
-                addLineDistanceConstraint(l.startPointId, l.endPointId, sp.len);
-            }
-            // Each segment of a chain is typed afresh.
-            m_shapeSpec.hasLen = m_shapeSpec.hasAngle = false;
-            return true;
-        }
-        case SketchToolMode::Circle:
-            // A typed size is exact: no grid rounding (see handleCircleTool).
-            handleCircleTool(end, /*exact=*/sp.hasLen);
-            clearShapeSpec();
-            return true;
-        case SketchToolMode::Rectangle: {
-            glm::vec2 c[4];
-            if (!rectResolve(cursor, c)) return false;
-            const double th = sp.hasAngle ? sp.angleDeg * kDeg2Rad : 0.0;
-            // A quarter-turn is still axis-aligned: keep the horizontal /
-            // vertical constraints that a click-drawn rectangle carries.
-            const bool axis = std::fabs(std::sin(th)) < 1e-6 || std::fabs(std::cos(th)) < 1e-6;
-            const float side0 = glm::length(c[1] - c[0]), side1 = glm::length(c[3] - c[0]);
-            if (side0 > 1e-6f && side1 > 1e-6f) {
-                if (axis) m_sketch->addRectangle(c[0], c[2]);
-                else      m_sketch->addRotatedRectangle(c);
-            }
-            m_isPlacing = false;
-            m_clickCount = 0;
-            clearShapeSpec();
-            return true;
-        }
-        case SketchToolMode::Arc: {
-            if (m_clickCount == 1) {
-                handleArcTool(end);
-                // The chord is placed; its typed length is spent, the apex value
-                // (if any) is for the next step.
-                m_shapeSpec.hasLen = false;
-                return true;
-            }
-            if (m_clickCount == 2) {
-                handleArcTool(end);
-                clearShapeSpec();
-                return true;
-            }
-            return false;
-        }
-        default:
-            return false;
-    }
-}
-
-bool SketchTool::commitShapeNow() {
-    if (!m_isPlacing || !m_sketch) return false;
-    switch (m_mode) {
-        case SketchToolMode::Line:
-        case SketchToolMode::Circle:
-        case SketchToolMode::Rectangle:
-        case SketchToolMode::Arc:
-            break;
-        default:
-            return false;
-    }
-    if (typedSizeIsZero()) { m_shapeRejection = "Size must be greater than 0."; return false; }
-    if (m_shapeSpec.any()) return commitTypedShape(m_currentPos);
-    // Nothing typed: Place = a click at the cursor, exactly as before.
-    NewElementGuard newElements(*this, m_sketch);
-    switch (m_mode) {
-        case SketchToolMode::Line:      handleLineTool(m_currentPos); break;
-        case SketchToolMode::Circle:    handleCircleTool(m_currentPos); break;
-        case SketchToolMode::Rectangle: handleRectangleTool(m_currentPos); break;
-        case SketchToolMode::Arc:       handleArcTool(m_currentPos); break;
-        default: break;
-    }
-    return true;
 }
 
 void SketchTool::handlePolygonTool(glm::vec2 pos) {
@@ -4679,14 +4176,12 @@ void SketchTool::handlePolygonTool(glm::vec2 pos) {
         // direction from center defines vertex 0's angle, so the first
         // vertex lands exactly under the (grid-snapped) cursor - same
         // "corner snaps to grid" behaviour the user gets with circles.
-        // A size / angle typed in the panel wins over the cursor.
-        float radius = 0.0f, rotationF = 0.0f;
-        polygonResolve(m_firstClick, pos, radius, rotationF);
         glm::vec2 delta = pos - m_firstClick;
+        float radius = glm::length(delta);
         if (radius > 1e-6f) {
             int existing = findCoincidentPoint(m_firstClick, -1);
             int centerId = (existing >= 0) ? existing : m_sketch->addPoint(m_firstClick);
-            double rotation = rotationF;
+            double rotation = std::atan2(delta.y, delta.x);
             // Diagnostic for the "first polygon comes out scrambled in the
             // wrong place" dogfood bug - logs what the tool THINKS it is
             // committing so the discrepancy point is identifiable.
@@ -4702,11 +4197,6 @@ void SketchTool::handlePolygonTool(glm::vec2 pos) {
 
         m_isPlacing = false;
         m_clickCount = 0;
-        // Typed values belong to the polygon just placed; the next one starts
-        // from the cursor again (the radius/diameter and circum/inscribed
-        // choices stay).
-        m_polygonSpec.hasSize = false;
-        m_polygonSpec.hasAngle = false;
     }
 }
 
@@ -4941,7 +4431,6 @@ void SketchTool::commitMirror(std::set<int>& outPoints, std::set<int>& outLines)
                 // Read before addLine: it can reallocate the vector `l` lives in.
                 const bool cons = l.isConstruction;
                 int nl = m_sketch->addLine(s, e);
-                m_sketch->setElementOrigin(nl, lid);
                 if (cons) m_sketch->setElementConstruction(nl, true);
                 outLines.insert(nl); outPoints.insert(s); outPoints.insert(e);
             }
@@ -4953,7 +4442,6 @@ void SketchTool::commitMirror(std::set<int>& outPoints, std::set<int>& outLines)
             if (ctr >= 0) {
                 const bool cons = c.isConstruction;
                 const int nc = m_sketch->addCircle(ctr, c.radius);
-                m_sketch->setElementOrigin(nc, cid);
                 if (cons) m_sketch->setElementConstruction(nc, true);
                 outPoints.insert(ctr);
             }
@@ -4968,7 +4456,6 @@ void SketchTool::commitMirror(std::set<int>& outPoints, std::set<int>& outLines)
             if (ctr >= 0 && s >= 0 && e >= 0) {
                 const bool cons = a.isConstruction;
                 const int na = m_sketch->addArc(ctr, e, s, a.radius);
-                m_sketch->setElementOrigin(na, aid);
                 if (cons) m_sketch->setElementConstruction(na, true);
                 outPoints.insert(s); outPoints.insert(e); outPoints.insert(ctr);
             }
@@ -4981,17 +4468,11 @@ void SketchTool::commitMirror(std::set<int>& outPoints, std::set<int>& outLines)
             if (cps.size() >= 2) {
                 const bool cons = sp.isConstruction;
                 const int ns = m_sketch->addSpline(cps);
-                m_sketch->setElementOrigin(ns, sid);
                 if (cons) m_sketch->setElementConstruction(ns, true);
             }
             for (int n2 : cps) outPoints.insert(n2);
             break;
         }
-    // A polygon mirrored whole is still a polygon (same sides and size), so the
-    // reflection edits like the original instead of being plain lines.
-    const std::set<int> mirroredLines(m_mirrorLines.begin(), m_mirrorLines.end());
-    m_sketch->copyPolygonRecords(m_sketch->polygonsMadeOf(mirroredLines),
-                                 [&](int id) { return remapPt(id); });
 }
 
 // --- Offset tool ----------------------------------------------------------
@@ -5000,13 +4481,13 @@ void SketchTool::updateOffsetHover(glm::vec2 pos) {
     m_offsetChainHover.clear();
     if (!m_sketch) return;
     if (m_offsetSuppressHover) {
-        if (glm::length(pos - m_offsetCommitPos) < pickTol(2.0f, 1.0f))
+        if (glm::length(pos - m_offsetCommitPos) < std::max(1.0f, tolStep() * 2.0f))
             return;
         m_offsetSuppressHover = false;
     }
     // Same catch range Trim picks with, so the two hover the same way.
-    const float threshold = pickTol(0.5f, 0.3f);
-    OffsetChain ch = walkOffsetChain(*m_sketch, pos, threshold, offsetOnly());
+    const float threshold = std::max(0.3f, tolStep() * 0.5f);
+    OffsetChain ch = walkOffsetChain(*m_sketch, pos, threshold);
     if (ch.valid()) densifyChain(ch, m_offsetChainHover);
 }
 
@@ -5019,126 +4500,10 @@ void SketchTool::updateOffsetDistance(glm::vec2 pos) {
 void SketchTool::recomputeOffsetPreview() {
     m_offsetPreview.clear();
     m_offsetResult = OffsetResult{};
-    m_offsetExtraRes.assign(m_offsetExtra.size(), OffsetResult{});
     if (!m_offsetChain.valid() || std::abs(m_offsetDistance) < 1e-6f) return;
     m_offsetResult = offsetChain(m_offsetChain, m_offsetDistance, m_offsetCorners);
     pruneOffset(m_offsetResult, m_offsetChain, m_offsetDistance);
-    // densifySegs REPLACES its output, so each chain goes through its own buffer
-    // and is appended - handing it m_offsetPreview each time left only the LAST
-    // chain on screen while the commit still made all of them (#186).
-    auto addPreview = [&](const OffsetResult& r) {
-        std::vector<std::vector<glm::vec2>> runs;
-        densifySegs(r.segs, runs);
-        m_offsetPreview.insert(m_offsetPreview.end(), runs.begin(), runs.end());
-    };
-    if (m_offsetResult.valid) addPreview(m_offsetResult);
-    for (size_t i = 0; i < m_offsetExtra.size(); ++i) {
-        const float d = m_offsetDistance * m_offsetExtraSign[i];
-        m_offsetExtraRes[i] = offsetChain(m_offsetExtra[i], d, m_offsetCorners);
-        pruneOffset(m_offsetExtraRes[i], m_offsetExtra[i], d);
-        if (m_offsetExtraRes[i].valid) addPreview(m_offsetExtraRes[i]);
-    }
-}
-
-namespace {
-// +1 counter-clockwise, -1 clockwise (open chains: +1).
-float chainWinding(const OffsetChain& ch) {
-    if (!ch.closed) return 1.0f;
-    std::vector<std::vector<glm::vec2>> polys;
-    densifyChain(ch, polys);
-    double a = 0.0;
-    for (const auto& p : polys)
-        for (size_t i = 0; i < p.size(); ++i) {
-            const glm::vec2 u = p[i], v = p[(i + 1) % p.size()];
-            a += static_cast<double>(u.x) * v.y - static_cast<double>(v.x) * u.y;
-        }
-    return a >= 0.0 ? 1.0f : -1.0f;
-}
-
-// Which way an OPEN chain runs, end to end (drawing direction is arbitrary).
-glm::vec2 chainSpan(const OffsetChain& ch) {
-    if (ch.segs.empty()) return glm::vec2(0.0f);
-    return ch.segs.back().at(1.0f) - ch.segs.front().at(0.0f);
-}
-
-// +1 / -1: does `other` offset to the same side as `primary` for the same signed
-// distance? Closed loops keep "outward stays outward" (their winding). Open runs
-// are offset to the RIGHT of travel, and the direction each was drawn in is
-// arbitrary - two parallel lines drawn in opposite directions would otherwise
-// move apart from each other - so they follow the primary's side in space: same
-// sign when they run the same way along it, flipped when they run against it.
-float sameSideSign(const OffsetChain& primary, const OffsetChain& other) {
-    if (primary.closed && other.closed) return chainWinding(other) * chainWinding(primary);
-    if (!primary.closed && !other.closed)
-        return glm::dot(chainSpan(other), chainSpan(primary)) < 0.0f ? -1.0f : 1.0f;
-    return chainWinding(other) * chainWinding(primary);
-}
-} // namespace
-
-// The elements selected when Offset was chosen become the chain(s) to offset.
-// Each separate connected run (elements touching end to end) is one chain; the
-// first drives the distance, the rest follow it. Returns false when nothing in
-// the selection can be offset (the tool then waits for a click as before).
-bool SketchTool::beginOffsetFromSelection() {
-    if (!m_sketch || m_offsetOnly.empty()) return false;
-    const float threshold = pickTol(0.5f, 0.3f);
-    std::vector<OffsetChain> chains;
-    std::set<int> covered;
-    auto probe = [&](glm::vec2 q) {
-        OffsetChain ch = walkOffsetChain(*m_sketch, q, threshold, offsetOnly());
-        if (!ch.valid()) return;
-        for (const auto& s : ch.segs) covered.insert(s.sourceId);
-        chains.push_back(std::move(ch));
-    };
-    for (int id : m_offsetOnly) {
-        if (covered.count(id)) continue;
-        // A point guaranteed to sit ON the element.
-        if (const SketchLine* l = [&]() -> const SketchLine* {
-                for (const auto& e : m_sketch->getLines()) if (e.id == id) return &e;
-                return nullptr; }()) {
-            const SketchPoint* a = m_sketch->getPoint(l->startPointId);
-            const SketchPoint* b = m_sketch->getPoint(l->endPointId);
-            if (a && b) probe(0.5f * (a->pos + b->pos));
-        } else if (const SketchCircle* c = [&]() -> const SketchCircle* {
-                for (const auto& e : m_sketch->getCircles()) if (e.id == id) return &e;
-                return nullptr; }()) {
-            if (const SketchPoint* p = m_sketch->getPoint(c->centerPointId))
-                probe(p->pos + glm::vec2(static_cast<float>(c->radius), 0.0f));
-        } else if (const SketchArc* ar = [&]() -> const SketchArc* {
-                for (const auto& e : m_sketch->getArcs()) if (e.id == id) return &e;
-                return nullptr; }()) {
-            const SketchPoint* ct = m_sketch->getPoint(ar->centerPointId);
-            const SketchPoint* s = m_sketch->getPoint(ar->startPointId);
-            const SketchPoint* e = m_sketch->getPoint(ar->endPointId);
-            if (ct && s && e) {
-                float a0 = std::atan2(s->pos.y - ct->pos.y, s->pos.x - ct->pos.x);
-                float a1 = std::atan2(e->pos.y - ct->pos.y, e->pos.x - ct->pos.x);
-                while (a1 <= a0) a1 += 2.0f * 3.14159265f;
-                const float am = 0.5f * (a0 + a1);
-                probe(ct->pos + glm::vec2(std::cos(am), std::sin(am)) * static_cast<float>(ar->radius));
-            }
-        } else if (const SketchSpline* sp = [&]() -> const SketchSpline* {
-                for (const auto& e : m_sketch->getSplines()) if (e.id == id) return &e;
-                return nullptr; }()) {
-            const auto poly = m_sketch->sampleSpline2D(*sp, 6);
-            if (!poly.empty()) probe(poly[poly.size() / 2]);
-        }
-    }
-    if (chains.empty()) return false;
-    m_offsetChain = std::move(chains.front());
-    m_offsetExtra.assign(std::make_move_iterator(chains.begin() + 1), std::make_move_iterator(chains.end()));
-    m_offsetExtraSign.clear();
-    for (const auto& ch : m_offsetExtra)
-        m_offsetExtraSign.push_back(sameSideSign(m_offsetChain, ch));
-    m_offsetExtraRes.assign(m_offsetExtra.size(), OffsetResult{});
-    m_offsetChainHover.clear();
-    m_offsetPhase = OffsetPhase::Distance;
-    m_offsetLocked = false;
-    m_offsetDistance = 0.0f;
-    m_offsetResult = OffsetResult{};
-    m_offsetPreview.clear();
-    m_isPlacing = true;   // the host's two-step Escape applies, as after a click-pick
-    return true;
+    if (m_offsetResult.valid) densifySegs(m_offsetResult.segs, m_offsetPreview);
 }
 
 void SketchTool::setOffsetDistance(float d) {
@@ -5146,250 +4511,16 @@ void SketchTool::setOffsetDistance(float d) {
     recomputeOffsetPreview();
 }
 
-// --- Reference tool -------------------------------------------------------
-
-namespace {
-constexpr float kRefTwoPi = 6.28318530717958647692f;
-
-float wrapPositive(float a) {
-    while (a < 0.0f) a += kRefTwoPi;
-    while (a >= kRefTwoPi) a -= kRefTwoPi;
-    return a;
-}
-
-// Polyline along a reference circle / arc, for the hover highlight.
-std::vector<glm::vec2> refCirclePoly(const Sketch::FaceReference::Circle& c) {
-    const int n = std::max(16, static_cast<int>(std::ceil(std::abs(c.sweep) / kRefTwoPi * 64.0f)));
-    std::vector<glm::vec2> poly;
-    poly.reserve(static_cast<size_t>(n) + 1);
-    for (int i = 0; i <= n; ++i) {
-        const float t = c.startAngle + c.sweep * (static_cast<float>(i) / n);
-        poly.push_back(c.center + glm::vec2(std::cos(t), std::sin(t)) * c.radius);
-    }
-    return poly;
-}
-} // namespace
-
-SketchTool::RefPick SketchTool::pickReference(glm::vec2 pos) const {
-    RefPick best;
-    if (!m_sketch) return best;
-    const auto& refs = m_sketch->getFaceReferences();
-    const float tol = pickTol(0.5f, 0.5f) * snapScale();
-    float bestD = tol;
-
-    for (size_t i = 0; i < refs.lines.size(); ++i) {
-        const glm::vec2 a = refs.lines[i].first, b = refs.lines[i].second;
-        const glm::vec2 ab = b - a;
-        const float len2 = glm::dot(ab, ab);
-        if (len2 < 1e-12f) continue;
-        const float t = glm::clamp(glm::dot(pos - a, ab) / len2, 0.0f, 1.0f);
-        const float d = glm::distance(a + ab * t, pos);
-        if (d < bestD) { bestD = d; best = {1, i}; }
-    }
-    for (size_t i = 0; i < refs.circles.size(); ++i) {
-        const auto& c = refs.circles[i];
-        const glm::vec2 r = pos - c.center;
-        const float d = std::abs(glm::length(r) - c.radius);
-        if (d >= bestD) continue;
-        if (c.sweep < kRefTwoPi - 1e-3f) {
-            // An arc: only its own span counts, not the rest of its circle.
-            const float rel = wrapPositive(std::atan2(r.y, r.x) - c.startAngle);
-            if (rel > c.sweep) continue;
-        }
-        bestD = d; best = {2, i};
-    }
-    for (size_t i = 0; i < refs.splines.size(); ++i) {
-        const auto& poly = refs.splines[i].poly;
-        for (size_t k = 0; k + 1 < poly.size(); ++k) {
-            const glm::vec2 a = poly[k], ab = poly[k + 1] - poly[k];
-            const float len2 = glm::dot(ab, ab);
-            if (len2 < 1e-12f) continue;
-            const float t = glm::clamp(glm::dot(pos - a, ab) / len2, 0.0f, 1.0f);
-            const float d = glm::distance(a + ab * t, pos);
-            if (d < bestD) { bestD = d; best = {4, i}; }
-        }
-    }
-    if (best.kind == 0) {
-        // Standalone points (another sketch's loose points) only when no line
-        // or curve is under the cursor.
-        float pd = tol * 0.8f;
-        for (size_t i = 0; i < refs.points.size(); ++i) {
-            const float d = glm::distance(refs.points[i], pos);
-            if (d < pd) { pd = d; best = {3, i}; }
-        }
-    }
-    return best;
-}
-
-void SketchTool::updateReferenceHover(glm::vec2 pos) {
-    m_refHover.clear();
-    if (!m_sketch) return;
-    const auto& refs = m_sketch->getFaceReferences();
-    const RefPick p = pickReference(pos);
-    if (p.kind == 1) {
-        m_refHover.push_back({refs.lines[p.idx].first, refs.lines[p.idx].second});
-    } else if (p.kind == 2) {
-        m_refHover.push_back(refCirclePoly(refs.circles[p.idx]));
-    } else if (p.kind == 4) {
-        m_refHover.push_back(refs.splines[p.idx].poly);
-    } else if (p.kind == 3) {
-        const glm::vec2 q = refs.points[p.idx];
-        const float h = pickTol(0.3f, 0.3f) * snapScale();
-        m_refHover.push_back({q + glm::vec2(-h, 0), q + glm::vec2(h, 0)});
-        m_refHover.push_back({q + glm::vec2(0, -h), q + glm::vec2(0, h)});
-    }
-}
-
-// The corner (a vertex where exactly two lines meet) nearest the cursor, within
-// the pick radius; -1 if none.
-int SketchTool::pickCornerPoint(glm::vec2 pos) const {
-    if (!m_sketch) return -1;
-    const float tol = pickTol(0.3f, 0.3f);
-    int best = -1;
-    float bestD = tol;
-    for (const auto& pt : m_sketch->getPoints()) {
-        if (pt.fromText) continue;
-        const float d = glm::length(pos - pt.pos);
-        if (d < bestD && m_sketch->isRoundableCorner(pt.id)) { bestD = d; best = pt.id; }
-    }
-    return best;
-}
-
-void SketchTool::handleCornerTool(glm::vec2 pos) {
-    if (!m_sketch) return;
-    m_cornerRejection = nullptr;
-    const int pid = pickCornerPoint(pos);
-    if (pid < 0) return;   // empty space: nothing to say
-    if (!m_sketch->roundCorner(pid, m_cornerSize, m_cornerChamfer)) {
-        m_cornerRejection = m_cornerChamfer
-            ? "Too big for this corner - the bevel has to fit on the shorter line."
-            : "Too big for this corner - the arc has to fit on the shorter line.";
-        return;
-    }
-    m_cornerHover = -1;
-}
-
-void SketchTool::handleReferenceTool(glm::vec2 pos) {
-    if (!m_sketch) return;
-    const RefPick p = pickReference(pos);
-    if (p.kind == 0) return;
-    const auto refs = m_sketch->getFaceReferences();   // copy: adding geometry never touches it, but be safe
-
-    // The point to use at `q`: an existing coincident sketch point, else a new one.
-    auto pointAt = [&](glm::vec2 q) {
-        int id = findExactCoincidentPoint(q, -1);
-        return id >= 0 ? id : m_sketch->addPoint(q);
-    };
-    auto lineExists = [&](int a, int b) {
-        for (const auto& l : m_sketch->getLines())
-            if ((l.startPointId == a && l.endPointId == b) ||
-                (l.startPointId == b && l.endPointId == a)) return true;
-        return false;
-    };
-    auto addLineAt = [&](glm::vec2 a, glm::vec2 b) {
-        const int ia = pointAt(a), ib = pointAt(b);
-        if (ia == ib || lineExists(ia, ib)) return;
-        m_sketch->addLine(ia, ib);
-    };
-    auto arcEnds = [](const Sketch::FaceReference::Circle& c) {
-        const float ea = c.startAngle + c.sweep;
-        return std::make_pair(
-            c.center + glm::vec2(std::cos(c.startAngle), std::sin(c.startAngle)) * c.radius,
-            c.center + glm::vec2(std::cos(ea), std::sin(ea)) * c.radius);
-    };
-    auto addCircleRef = [&](const Sketch::FaceReference::Circle& c) {
-        const int ctr = pointAt(c.center);
-        if (c.sweep >= kRefTwoPi - 1e-3f) {
-            for (const auto& e : m_sketch->getCircles())
-                if (e.centerPointId == ctr && std::abs(e.radius - c.radius) < 1e-4) return;
-            m_sketch->addCircle(ctr, c.radius);
-        } else {
-            const auto [s, e] = arcEnds(c);
-            const int is = pointAt(s), ie = pointAt(e);
-            for (const auto& ar : m_sketch->getArcs())
-                if (ar.centerPointId == ctr && ((ar.startPointId == is && ar.endPointId == ie) ||
-                                                (ar.startPointId == ie && ar.endPointId == is))) return;
-            m_sketch->addArc(ctr, is, ie, c.radius);
-        }
-    };
-    auto addSplineRef = [&](const Sketch::FaceReference::Spline& sp) {
-        std::vector<int> ids;
-        for (glm::vec2 q : sp.control) {
-            const int id = pointAt(q);
-            if (ids.empty() || ids.back() != id) ids.push_back(id);
-        }
-        if (ids.size() >= 2) m_sketch->addSpline(ids);
-    };
-
-    // Ctrl: take the whole connected run the picked curve belongs to - lines,
-    // arcs and splines joined end to end (a pipe wall is a line AND an arc, so a
-    // lines-only walk stopped at the first corner). Nodes: 0 line, 1 arc, 2 spline.
-    if (m_lastDownAddedToSel && p.kind != 3) {
-        struct Node { int type; size_t idx; glm::vec2 a, b; };
-        std::vector<Node> nodes;
-        int seed = -1;
-        for (size_t i = 0; i < refs.lines.size(); ++i) {
-            if (p.kind == 1 && p.idx == i) seed = static_cast<int>(nodes.size());
-            nodes.push_back({0, i, refs.lines[i].first, refs.lines[i].second});
-        }
-        for (size_t i = 0; i < refs.circles.size(); ++i) {
-            if (refs.circles[i].sweep >= kRefTwoPi - 1e-3f) {
-                if (p.kind == 2 && p.idx == i) seed = -2;   // a full circle is its own run
-                continue;
-            }
-            if (p.kind == 2 && p.idx == i) seed = static_cast<int>(nodes.size());
-            const auto [s, e] = arcEnds(refs.circles[i]);
-            nodes.push_back({1, i, s, e});
-        }
-        for (size_t i = 0; i < refs.splines.size(); ++i) {
-            if (p.kind == 4 && p.idx == i) seed = static_cast<int>(nodes.size());
-            nodes.push_back({2, i, refs.splines[i].poly.front(), refs.splines[i].poly.back()});
-        }
-        if (seed >= 0) {
-            const float eps = 1e-3f;
-            std::vector<bool> used(nodes.size(), false);
-            std::vector<size_t> run{static_cast<size_t>(seed)};
-            used[static_cast<size_t>(seed)] = true;
-            for (size_t k = 0; k < run.size(); ++k) {
-                const Node A = nodes[run[k]];
-                for (size_t i = 0; i < nodes.size(); ++i) {
-                    if (used[i]) continue;
-                    const Node& B = nodes[i];
-                    if (glm::distance(A.a, B.a) < eps || glm::distance(A.a, B.b) < eps ||
-                        glm::distance(A.b, B.a) < eps || glm::distance(A.b, B.b) < eps) {
-                        used[i] = true; run.push_back(i);
-                    }
-                }
-            }
-            for (size_t n : run) {
-                const Node& nd = nodes[n];
-                if (nd.type == 0) addLineAt(refs.lines[nd.idx].first, refs.lines[nd.idx].second);
-                else if (nd.type == 1) addCircleRef(refs.circles[nd.idx]);
-                else addSplineRef(refs.splines[nd.idx]);
-            }
-            m_refHover.clear();
-            return;
-        }
-    }
-
-    if (p.kind == 1)      addLineAt(refs.lines[p.idx].first, refs.lines[p.idx].second);
-    else if (p.kind == 2) addCircleRef(refs.circles[p.idx]);
-    else if (p.kind == 4) addSplineRef(refs.splines[p.idx]);
-    else                  pointAt(refs.points[p.idx]);
-    m_refHover.clear();
-}
-
 void SketchTool::handleOffsetTool(glm::vec2 pos) {
     if (!m_sketch) return;
 
     if (m_offsetPhase == OffsetPhase::Pick) {
-        const float threshold = pickTol(0.5f, 0.3f);
-        OffsetChain ch = walkOffsetChain(*m_sketch, pos, threshold, offsetOnly());
+        const float threshold = std::max(0.3f, tolStep() * 0.5f);
+        OffsetChain ch = walkOffsetChain(*m_sketch, pos, threshold);
         if (!ch.valid()) return; // missed, or landed on something unofferable
         m_offsetChain = std::move(ch);
         m_offsetChainHover.clear();
         m_offsetPhase = OffsetPhase::Distance;
-        m_offsetLocked = false;
         m_offsetDistance = 0.0f;
         m_offsetResult = OffsetResult{};
         m_offsetPreview.clear();
@@ -5400,32 +4531,18 @@ void SketchTool::handleOffsetTool(glm::vec2 pos) {
 
     // Distance phase: the click asks for the commit, it does not perform it -
     // the app wraps commitOffset in recordSketchMutation for one undo step.
-    // Locked (typed value, or a tap already fixed it): the pointer does not
-    // move the distance. A mouse click then commits what is shown; a touch tap
-    // is ignored (it is the Offset button that commits, Follow cursor that
-    // frees it again).
-    if (m_offsetLocked) {
-        if (!m_offsetTapLocks && m_offsetResult.valid) m_offsetCommitRequested = true;
-        return;
-    }
     updateOffsetDistance(snap(pos));
-    if (!m_offsetResult.valid) return;
-    if (m_offsetTapLocks) m_offsetLocked = true;
-    else                  m_offsetCommitRequested = true;
+    if (m_offsetResult.valid) m_offsetCommitRequested = true;
 }
 
 void SketchTool::commitOffset(std::set<int>& outPoints, std::set<int>& outElements) {
     m_offsetCommitRequested = false;
     if (!m_sketch || !m_offsetResult.valid) return;
-    m_offsetOnly.clear(); // the selection was for this one; the next pick is free
-    // EXACT: offset endpoints are generated, so committing the same preview
-    // must give the same connectivity at any zoom.
-    auto weld = [this](glm::vec2 p) { return findExactCoincidentPoint(p, -1); };
-    applyOffset(*m_sketch, m_offsetResult, weld, outPoints, outElements,
-                // "Draw as construction" on = flip each element's type.
-                m_constructionDraw);
-    for (const auto& r : m_offsetExtraRes)
-        if (r.valid) applyOffset(*m_sketch, r, weld, outPoints, outElements, m_constructionDraw);
+    applyOffset(*m_sketch, m_offsetResult,
+                // EXACT: offset endpoints are generated, so committing the
+                // same preview must give the same connectivity at any zoom.
+                [this](glm::vec2 p) { return findExactCoincidentPoint(p, -1); },
+                outPoints, outElements);
     // Back to Pick, tool still active: offsetting several chains in a row is
     // the normal way to use this (Trim likewise stays active after a click).
     const glm::vec2 where = m_currentPos;
@@ -5443,10 +4560,6 @@ void SketchTool::cancelOffset() {
     m_offsetPhase = OffsetPhase::Pick;
     m_offsetChain = OffsetChain{};
     m_offsetResult = OffsetResult{};
-    m_offsetExtra.clear();
-    m_offsetExtraRes.clear();
-    m_offsetExtraSign.clear();
-    m_offsetLocked = false;
     m_offsetDistance = 0.0f;
     m_offsetCommitRequested = false;
     m_offsetChainHover.clear();
@@ -5489,7 +4602,7 @@ DimPick SketchTool::hitTestDimEntity(glm::vec2 pos) const {
             return {DimEntityKind::Point, nearPt};
         }
     }
-    const float tol = pickTol(0.5f, 0.5f) * snapScale();
+    const float tol = std::max(tolStep() * 0.5f, 0.5f) * snapScale();
     // Lines (segment distance), skipping fromText - same math as handleSelectTool.
     float bestD = 0.0f; int bestLine = -1;
     for (const auto& l : m_sketch->getLines()) {
@@ -5516,8 +4629,9 @@ DimPick SketchTool::hitTestDimEntity(glm::vec2 pos) const {
     if (bestCircle >= 0) return {DimEntityKind::Circle, bestCircle};
     float bestAd = 0.0f; int bestArc = -1;
     for (const auto& a : m_sketch->getArcs()) {
-        if (!m_sketch->getPoint(a.centerPointId)) continue;
-        float d = m_sketch->distanceToArc(a, pos);
+        const SketchPoint* ctr = m_sketch->getPoint(a.centerPointId);
+        if (!ctr) continue;
+        float d = std::abs(glm::distance(pos, ctr->pos) - static_cast<float>(a.radius));
         if (d < tol && (bestArc < 0 || d < bestAd)) { bestArc = a.id; bestAd = d; }
     }
     if (bestArc >= 0) return {DimEntityKind::Arc, bestArc};

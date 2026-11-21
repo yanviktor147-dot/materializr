@@ -7,8 +7,6 @@
 #include <cstdlib>
 
 #include <BRepPrimAPI_MakePrism.hxx>
-#include <BRepAdaptor_Surface.hxx>
-#include <GeomAbs_SurfaceType.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
@@ -178,14 +176,7 @@ int PushPullOp::getSketchIdAt(int targetIndex) const {
 // sketch. Used by the cascade walker after a constraint commit. Returns
 // true if at least one profile was rebuilt - caller should then re-execute
 // the op so the body shape catches up.
-void PushPullOp::setSketchScope(int sketchId, SketchScope s) {
-    if (sketchId < 0) return;
-    if (s == SketchScope::Contours) m_contourSketches.insert(sketchId);
-    else { m_contourSketches.erase(sketchId); m_usedSigs.erase(sketchId); }
-}
-
-bool PushPullOp::rebuildProfileFromSketch(Document& doc, int sketchId, bool adoptNewRegions,
-                                          bool isLatest) {
+bool PushPullOp::rebuildProfileFromSketch(Document& doc, int sketchId) {
     if (sketchId < 0) return false;
     auto sk = doc.getSketch(sketchId);
     if (!sk) return false;
@@ -259,49 +250,6 @@ bool PushPullOp::rebuildProfileFromSketch(Document& doc, int sketchId, bool adop
             }
         }
         any = true;
-    }
-
-    // Contours drawn since this op was made: the push/pull is a feature of the
-    // sketch, so a new closed shape in it gets the same distance and host. Only
-    // regions NO target claims, and none of the points recorded at the start
-    // fall in.
-    const bool contoursScope = m_contourSketches.count(sketchId) != 0;
-    if (adoptNewRegions && (contoursScope || isLatest)) {
-        const auto kit = m_knownPts.find(sketchId);
-        const auto sigIt = m_usedSigs.find(sketchId);
-        int tmpl = -1;
-        for (size_t i = 0; i < m_targets.size() && tmpl < 0; ++i)
-            if (i < m_sketchSourceIds.size() && m_sketchSourceIds[i] == sketchId) tmpl = static_cast<int>(i);
-        if (kit != m_knownPts.end() && !kit->second.empty() && tmpl >= 0 &&
-            (!contoursScope || (sigIt != m_usedSigs.end() && !sigIt->second.empty()))) {
-            const int host = m_targets[tmpl].sourceBodyId;
-            for (int idx : sk->regionsMissingFrom(regions, kit->second)) {
-                if (owner[idx] >= 0 || regions[idx].face.IsNull()) continue;
-                if (contoursScope) {
-                    // Only a copy of a contour this op used (same bounding
-                    // elements, traced back to the originals).
-                    const std::vector<int> sig = sk->faceRootSignature(regions[idx].face);
-                    if (sig.empty() ||
-                        std::find(sigIt->second.begin(), sigIt->second.end(), sig) ==
-                            sigIt->second.end())
-                        continue;
-                }
-                Target t;
-                t.profile = regions[idx].face;
-                t.sourceBodyId = host;
-                m_targets.push_back(std::move(t));
-                m_sketchSourceIds.push_back(sketchId);
-                m_sketchSourceRegions.push_back(idx);
-                m_sketchSourceAnchors.push_back(regions[idx].representativePoint);
-                m_hasAnchor.push_back(1);
-                if (m_faceIndices.size() + 1 == m_targets.size()) m_faceIndices.push_back(0);
-                if (m_targetRefs.size() + 1 == m_targets.size()) m_targetRefs.emplace_back();
-                owner[idx] = static_cast<int>(m_targets.size()) - 1;
-                std::fprintf(stderr, "[PushPull] adopted a contour drawn since the push "
-                             "(sketch %d, region %d)\n", sketchId, idx);
-                any = true;
-            }
-        }
     }
     return any;
 }
@@ -443,30 +391,6 @@ bool PushPullOp::execute(Document& doc) {
     m_prevFaceIds.clear();
     m_reuseIdx = 0; // walks m_reuseBodyIds as each free-floating output is emitted
     if (m_targets.empty() || std::abs(m_distance) < 1e-6) return false;
-
-    // What the source sketch(es) held when this op first ran - so a contour
-    // drawn later can be told from the ones that were already there.
-    for (size_t i = 0; i < m_sketchSourceIds.size(); ++i) {
-        const int sid = m_sketchSourceIds[i];
-        if (sid < 0 || m_knownPts.count(sid)) continue;
-        if (auto sk = doc.getSketch(sid))
-            m_knownPts[sid] = sk->drawnRegionSamples(sk->buildRegions());
-    }
-    // Contour-scoped: what bounds each contour used, so its copies can be found.
-    std::set<int> sigsKnown;   // taken once, when the op was made - not re-taken as it adopts
-    for (const auto& [sid, sigs] : m_usedSigs)
-        if (!sigs.empty()) sigsKnown.insert(sid);
-    for (size_t i = 0; i < m_sketchSourceIds.size() && i < m_targets.size(); ++i) {
-        const int sid = m_sketchSourceIds[i];
-        if (sid < 0 || !m_contourSketches.count(sid) || sigsKnown.count(sid) ||
-            m_targets[i].profile.IsNull()) continue;
-        auto sk = doc.getSketch(sid);
-        if (!sk) continue;
-        auto sig = sk->faceRootSignature(m_targets[i].profile);
-        auto& sigs = m_usedSigs[sid];
-        if (!sig.empty() && std::find(sigs.begin(), sigs.end(), sig) == sigs.end())
-            sigs.push_back(std::move(sig));
-    }
 
     // A result the preview worker computed on copies of these bodies: apply
     // it as-is (see setPrecomputed). Bodies the op may touch but the worker
@@ -763,20 +687,7 @@ bool PushPullOp::execute(Document& doc) {
                         doc.getBody(tgt.sourceBodyId), tgt.profile, center, faceNormal);
                 }
             }
-        } catch (...) {
-            // The normal could not be read. The old (0,0,1) default is IN the
-            // plane of any sketch standing on an XZ / YZ plane, so the prism came
-            // out flat in the sketch's own plane (1.8.0.b2_4). A planar profile
-            // knows its own normal.
-            try {
-                BRepAdaptor_Surface bs(tgt.profile);
-                if (bs.GetType() == GeomAbs_Plane) {
-                    gp_Dir pn = bs.Plane().Axis().Direction();
-                    if (tgt.profile.Orientation() == TopAbs_REVERSED) pn.Reverse();
-                    faceNormal = gp_Vec(pn);
-                }
-            } catch (...) {}
-        }
+        } catch (...) {}
 
         // Sign of distance determines prism direction & boolean mode
         double dir = m_distance >= 0.0 ? 1.0 : -1.0;
@@ -1079,21 +990,6 @@ std::string PushPullOp::serializeParams() const {
             blob += ";tr" + std::to_string(i) + "=" + m_targetRefs[i].serialize();
         }
     }
-    for (int sid : m_contourSketches) {
-        blob += ";cn" + std::to_string(sid) + "=1";
-        const auto it = m_usedSigs.find(sid);
-        if (it != m_usedSigs.end() && !it->second.empty())
-            blob += ";ug" + std::to_string(sid) + "=" + sketchSigsToString(it->second);
-    }
-    // Points inside every drawn region when the op first ran, per sketch.
-    for (const auto& [sid, pts] : m_knownPts) {
-        if (pts.empty()) continue;
-        blob += ";kp" + std::to_string(sid) + "=";
-        for (size_t i = 0; i < pts.size(); ++i) {
-            std::snprintf(buf, sizeof(buf), "%s%.4f:%.4f", i ? "," : "", pts[i].x, pts[i].y);
-            blob += buf;
-        }
-    }
     return blob;
 }
 
@@ -1136,32 +1032,7 @@ bool PushPullOp::deserializeParams(const std::string& blob) {
         if (end == std::string::npos) end = blob.size();
         std::string key = blob.substr(pos, eq - pos);
         std::string val = blob.substr(eq + 1, end - eq - 1);
-        if (key.size() >= 3 && key[0] == 'c' && key[1] == 'n') {
-            m_contourSketches.insert(std::atoi(key.c_str() + 2));
-            any = true;
-        }
-        else if (key.size() >= 3 && key[0] == 'u' && key[1] == 'g') {
-            m_usedSigs[std::atoi(key.c_str() + 2)] = sketchSigsFromString(val);
-            any = true;
-        }
-        else if (key.size() >= 3 && key[0] == 'k' && key[1] == 'p') {
-            const int sid = std::atoi(key.c_str() + 2);
-            auto& pts = m_knownPts[sid];
-            pts.clear();
-            size_t q = 0;
-            while (q < val.size() && pts.size() < 4096) {
-                const size_t c2 = val.find(',', q);
-                const std::string tok = val.substr(q, c2 == std::string::npos ? std::string::npos : c2 - q);
-                const size_t col = tok.find(':');
-                if (col != std::string::npos)
-                    pts.emplace_back(static_cast<float>(std::atof(tok.c_str())),
-                                     static_cast<float>(std::atof(tok.c_str() + col + 1)));
-                if (c2 == std::string::npos) break;
-                q = c2 + 1;
-            }
-            any = true;
-        }
-        else if (key.size() >= 3 && key[0] == 't' && key[1] == 'r') {
+        if (key.size() >= 3 && key[0] == 't' && key[1] == 'r') {
             int idx = std::atoi(key.c_str() + 2);
             if (idx >= 0 && idx < count)
                 m_targetRefs[idx] = materializr::topo::Ref::parse(val);

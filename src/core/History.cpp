@@ -4,7 +4,6 @@
 #include "Verbose.h"
 #include "../modeling/Sketch.h"
 #include "../modeling/SketchEditOp.h"
-#include <algorithm>
 #include <cstdio>
 #include <map>
 #include <set>
@@ -84,13 +83,8 @@ bool History::pushOperation(std::unique_ptr<Operation> op, Document& doc) {
         }
     }
 
-    // An op that owns suppressed steps (a sketch delete) switches them off
-    // BEFORE it runs: its own execute() removes what they were built from.
-    suppressStepsOf(*op, doc);
-
     // Execute the operation
     if (!op->execute(doc)) {
-        restoreStepsOf(*op, doc);
         return false;
     }
     op->rememberGoodParams();
@@ -175,8 +169,6 @@ bool History::undo(Document& doc) {
 
     m_lastUndoneStep = idx;
     m_currentIndex = idx - 1;
-    // The steps this one had switched off come back with what they hung from.
-    restoreStepsOf(*op, doc);
     // Manual undo means the user is steering the applied range themselves -
     // drop any pending auto-recovery so a later edit doesn't surprise-redo
     // steps they deliberately walked back past.
@@ -223,9 +215,7 @@ bool History::redo(Document& doc) {
     }
 
     Operation* op = m_operations[idx].get();
-    suppressStepsOf(*op, doc);
     if (!op->execute(doc)) {
-        restoreStepsOf(*op, doc);
         m_failedReplayAt = idx;
         m_lastRedoneStep = -1;
         return false; // leave the tip below the failed step
@@ -368,7 +358,7 @@ bool History::editStep(int index, Document& doc, bool transactional) {
     // then re-execute from `index` forward so the edited parameters take effect.
     for (int i = limit; i >= index; --i) {
         Operation* op = m_operations[i].get();
-        if (op->isEnabled() && !op->isReviving()) op->undo(doc);
+        if (op->isEnabled()) op->undo(doc);
     }
     bool editRejected = false;
     // Asked after each step: an aborted step may have returned anything (a
@@ -551,85 +541,9 @@ bool History::removeStep(int index, Document& doc) {
         }
     }
 
-    // The removed step is gone for good: no op may keep naming it as one of the
-    // steps it switches off (its address could be reused by a later op).
-    for (auto& o : m_operations) o->dropSuppressedStep(removed.get());
-
     if (m_eventBus) m_eventBus->publish(materializr::HistoryStepEvent{m_currentIndex, true});
     resolveMates(doc, /*regenerated=*/true);
     return true;
-}
-
-int History::indexOf(const Operation* op) const {
-    for (int i = 0; i < static_cast<int>(m_operations.size()); ++i)
-        if (m_operations[i].get() == op) return i;
-    return -1;
-}
-
-int History::flipSteps(const std::vector<int>& indices, bool enabled, Document& doc) {
-    ReplayGuard _rg{doc};
-    ++m_revision;
-    const int count = static_cast<int>(m_operations.size());
-    std::vector<int> todo;
-    for (int i : indices)
-        if (i >= 0 && i < count && m_operations[i]->isEnabled() != enabled) todo.push_back(i);
-    if (todo.empty()) return -1;
-    const int first = *std::min_element(todo.begin(), todo.end());
-
-    // Above the tip nothing is applied: the flag alone is enough.
-    if (first > m_currentIndex) {
-        for (int i : todo) m_operations[i]->setEnabled(enabled);
-        resolveMates(doc, /*regenerated=*/true);
-        return -1;
-    }
-
-    // Same roll back / flip / replay as setStepEnabled, for the whole batch.
-    for (int i = m_currentIndex; i >= first; --i) {
-        Operation* op = m_operations[i].get();
-        if (op->isEnabled() && !op->isReviving()) op->undo(doc);
-    }
-    for (int i : todo) m_operations[i]->setEnabled(enabled);
-
-    int firstFail = -1;
-    for (int i = first; i <= m_currentIndex; ++i) {
-        Operation* op = m_operations[i].get();
-        if (!op->isEnabled()) continue;
-        if (!op->execute(doc)) {
-            if (firstFail < 0) firstFail = i;
-            continue;
-        }
-        op->rememberGoodParams();
-    }
-    if (m_eventBus)
-        m_eventBus->publish(materializr::HistoryStepEvent{m_currentIndex, true});
-    resolveMates(doc, /*regenerated=*/true);
-    return firstFail;
-}
-
-void History::suppressStepsOf(Operation& owner, Document& doc) {
-    if (owner.suppressedSteps().empty()) return;
-    auto indicesOf = [&]() {
-        std::vector<int> idx;
-        for (Operation* s : owner.suppressedSteps())
-            if (int i = indexOf(s); i >= 0) idx.push_back(i);
-        return idx;
-    };
-    int fail = flipSteps(indicesOf(), false, doc);
-    // A step that cannot rebuild without the ones just switched off goes with
-    // them (bounded, like the sketch cascade, so a broken chain cannot spin).
-    for (int guard = 0; fail >= 0 && guard < 16; ++guard) {
-        owner.addSuppressedStep(m_operations[fail].get());
-        fail = flipSteps({fail}, false, doc);
-    }
-    m_failedReplayAt = -1;
-}
-
-void History::restoreStepsOf(Operation& owner, Document& doc) {
-    if (owner.suppressedSteps().empty()) return;
-    std::vector<int> idx;
-    for (Operation* s : owner.suppressedSteps())
-        if (int i = indexOf(s); i >= 0) idx.push_back(i);
-    flipSteps(idx, true, doc);
 }
 
 bool History::setStepEnabled(int index, bool enabled, Document& doc) {
@@ -643,9 +557,6 @@ bool History::setStepEnabled(int index, bool enabled, Document& doc) {
     int count = static_cast<int>(m_operations.size());
     if (index < 0 || index >= count) return false;
     Operation* target = m_operations[index].get();
-    // Toggling a step is the user's call (the cascade re-flags the steps it
-    // switches off itself, after this returns).
-    target->setCascadeSuspended(false);
     if (target->isEnabled() == enabled) return true; // no change
 
     // Above the applied tip (redo region / breakpoint-suppressed): the step
@@ -663,7 +574,7 @@ bool History::setStepEnabled(int index, bool enabled, Document& doc) {
     // never applied, so it's correctly skipped.
     for (int i = m_currentIndex; i >= index; --i) {
         Operation* op = m_operations[i].get();
-        if (op->isEnabled() && !op->isReviving()) op->undo(doc);
+        if (op->isEnabled()) op->undo(doc);
     }
 
     target->setEnabled(enabled);
