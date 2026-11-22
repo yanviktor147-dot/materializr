@@ -1831,7 +1831,7 @@ void Application::renderPatternPanel() {
             if (!axisIds.empty()) ImGui::Separator();
             for (int i = 0; i < 3; ++i) {
                 bool sel = (m_patternAxisId < 0 && m_patternAxisIdx == i);
-                if (ImGui::Selectable(userLabels[i], sel)) {
+                if (ImGui::Selectable(materializr::tr(userLabels[i]), sel)) {
                     m_patternAxisId = -1;
                     m_patternAxisIdx = i;
                     axisChanged = true;
@@ -4070,7 +4070,8 @@ void Application::renderRevolvePopup() {
                   " (id " + std::to_string(m_revolveAxisId) + ")";
     } else {
         const char* worldLabels[3] = {"World X", "World Y (Z-up depth)", "World Z (Z-up up)"};
-        current = worldLabels[std::clamp(m_revolveWorldAxisIdx, 0, 2)];
+        current = materializr::tr(
+            worldLabels[std::clamp(m_revolveWorldAxisIdx, 0, 2)]);
     }
     if (ImGui::BeginCombo("##revAxisCombo", current.c_str())) {
         for (int aid : axisIds) {

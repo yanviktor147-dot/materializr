@@ -4693,6 +4693,29 @@ for _en, _ru in RU_GAPS3.items():
     else:
         CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
 
+
+# ---- Gap-fill round 4 (axis labels) ----
+RU_GAPS4 = {
+    "Front": "Спереди",
+    "Right": "Справа",
+    "Top": "Верх",
+    "World X": "Мир X",
+    "World Y (Z-up depth)": "Мир Y (глубина, Z-вверх)",
+    "World Z (Z-up up)": "Мир Z (высота, Z-вверх)",
+    "X (user)": "X (как в интерфейсе)",
+    "Y (user)": "Y (как в интерфейсе)",
+    "Z (user, floor-up)": "Z (как в интерфейсе, от пола вверх)",
+}
+
+for _en, _ru in RU_GAPS4.items():
+    for _entry in CAT:
+        if _entry[0] == _en:
+            if not _entry[1].get("ru"):
+                _entry[1]["ru"] = _ru
+            break
+    else:
+        CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
+
 def cstr(s):
     """C string literal with non-ASCII as explicit \\xNN UTF-8 bytes.
 
