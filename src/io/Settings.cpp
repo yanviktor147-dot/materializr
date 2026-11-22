@@ -1,6 +1,7 @@
 #include "core/Units.h"
 #include <cmath>
 #include "Settings.h"
+#include "../i18n.h"
 
 #include <cctype>
 #include <cstring>
@@ -216,7 +217,7 @@ void applyKv(const std::map<std::string, std::string>& kv, AppSettings& s) {
 
     readIntClamped(kv, "inferenceLevel", s.inferenceLevel, 0, 3);
     // -1 is meaningful here ("never chosen"), so the floor is -1, not 0.
-    readIntClamped(kv, "language", s.language, -1, 5);
+    readIntClamped(kv, "language", s.language, -1, static_cast<int>(Lang::COUNT) - 1);
     readBool(kv, "showInferenceToolbarToggle", s.showInferenceToolbarToggle);
     readBool(kv, "exportGreyFills", s.exportGreyFills);
     readBool(kv, "showSelectionMeasurements", s.showSelectionMeasurements);
