@@ -8742,7 +8742,7 @@ void Application::run() {
                         ImGuiWindowFlags_NoFocusOnAppearing |
                         ImGuiWindowFlags_NoNav;
                     bool open = true;
-                    if (ImGui::Begin(materializr::tr("Pick more sketches###Pick more sketches), &open, flags)) {
+                    if (ImGui::Begin(materializr::tr("Pick more sketches###Pick more sketches"), &open, flags)) {
                         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s", materializr::tr("Loft needs at least two profiles."));
                         ImGui::TextWrapped("%s", materializr::tr("Ctrl-click the other sketches (or their regions) in loft order - as many as you like - then click Loft again."));
                     }
