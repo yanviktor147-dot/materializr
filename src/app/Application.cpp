@@ -2171,11 +2171,16 @@ void Application::applyAppSettings(const AppSettings& s) {
     m_touchMode = s.touchMode;   // staged value for the Settings dialog
     m_uiScaleUser = s.uiScaleUser;
     m_uiLayout = s.uiLayout;     // interface layout - live, no restart needed
-    // UI language - also live. -1 means the user has never chosen, which the
-    // setup wizard turns into its opening question; until then, English.
+    // UI language - also live. -1 means the user has never chosen: adopt
+    // the system language (the tour only asks when the OS cannot tell);
+    // English stays the pass-through fallback.
     m_language = s.language;
-    setLanguage((s.language > 0 && s.language < languageCount())
-                    ? static_cast<Lang>(s.language)
+    if (m_language < 0) {
+        const int sysLang = materializr::systemLanguageIndex();
+        if (sysLang >= 0) m_language = sysLang;
+    }
+    setLanguage((m_language > 0 && m_language < languageCount())
+                    ? static_cast<Lang>(m_language)
                     : Lang::English);
     applyDisplayUnitChange(s.displayUnit);
     m_imTouchTree = s.imTouchTree;
@@ -8737,7 +8742,7 @@ void Application::run() {
                         ImGuiWindowFlags_NoFocusOnAppearing |
                         ImGuiWindowFlags_NoNav;
                     bool open = true;
-                    if (ImGui::Begin(materializr::tr("Pick more sketches###Pick more sketches"),, &open, flags)) {
+                    if (ImGui::Begin(materializr::tr("Pick more sketches###Pick more sketches), &open, flags)) {
                         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s", materializr::tr("Loft needs at least two profiles."));
                         ImGui::TextWrapped("%s", materializr::tr("Ctrl-click the other sketches (or their regions) in loft order - as many as you like - then click Loft again."));
                     }

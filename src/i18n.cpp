@@ -9,6 +9,14 @@
 #include <unordered_set>
 #include <vector>
 
+#include <SDL_version.h>
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+#include <SDL_locale.h>
+#endif
+#if defined(__ANDROID__)
+#include <sys/system_properties.h>
+#endif
+
 namespace materializr {
 namespace {
 
@@ -65,6 +73,62 @@ void rebuild() {
 }
 
 } // namespace
+// ---- system language detection -------------------------------------------
+namespace {
+
+// Lang order (English 0 ... Russian 6); codes are what OS locales report.
+const char* kLangCodes[] = {"en", "es", "pt", "fr", "de", "it", "ru"};
+
+char lc(char c) { return (c >= 'A' && c <= 'Z') ? char(c - 'A' + 'a') : c; }
+bool codeEq(const char* a, const char* b) {
+    while (*a && *b) {
+        if (lc(*a) != lc(*b)) return false;
+        ++a; ++b;
+    }
+    return *a == 0 && *b == 0;
+}
+
+} // namespace
+
+int languageIndexFromCode(const char* code) {
+    if (!code || !code[0]) return -1;
+    for (int i = 0; i < static_cast<int>(Lang::COUNT); ++i) {
+        if (i < static_cast<int>(sizeof(kLangCodes) / sizeof(kLangCodes[0])) &&
+            codeEq(code, kLangCodes[i]))
+            return i;
+    }
+    return -1;
+}
+
+int systemLanguageIndex() {
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+    // SDL asks the OS for the user's preferred locales (Android, iOS,
+    // Windows, macOS); NULL when it cannot tell.
+    if (SDL_Locale* locs = SDL_GetPreferredLocales()) {
+        int found = -1;
+        for (SDL_Locale* l = locs; found < 0 && l && l->language; ++l)
+            found = languageIndexFromCode(l->language);
+        SDL_free(locs);
+        if (found >= 0) return found;
+    }
+#endif
+#if defined(__ANDROID__)
+    // Fallback for older SDL: read the system property directly. The value
+    // looks like "ru-RU"; the part before '-' is what we match.
+    char buf[PROP_VALUE_MAX] = {0};
+    for (const char* name : {"persist.sys.locale", "ro.product.locale"})
+        if (__system_property_get(name, buf) > 0 && buf[0]) break;
+    if (buf[0]) {
+        std::string code(buf);
+        const std::size_t dash = code.find('-');
+        if (dash != std::string::npos) code = code.substr(0, dash);
+        return languageIndexFromCode(code.c_str());
+    }
+#endif
+    return -1;
+}
+
+
 
 void setLanguage(Lang l) {
     std::lock_guard<std::mutex> lk(g_mutex);

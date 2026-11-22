@@ -1204,8 +1204,9 @@ private:
     // Live-switchable: read every frame by run()/renderViewport(); persisted
     // on save. The helpers below are the preferred spelling at call sites.
     UiLayout m_uiLayout = UiLayout::Classic;
-    // UI language index, mirroring materializr::Lang. -1 = never chosen, which
-    // is what makes the setup wizard open with the language question.
+    // UI language index, mirroring materializr::Lang. -1 = never chosen; at
+    // startup the loader replaces it with the system language when the OS
+    // can tell, so the tour's language page opens only if detection failed.
     int m_language = -1;
     // Mirrors Settings::displayUnit. Change it ONLY through
     // applyDisplayUnitChange, which also drops any active text edit so a field
