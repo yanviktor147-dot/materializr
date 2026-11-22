@@ -190,7 +190,7 @@ bool Application::bodyExists(int bodyId) const {
 }
 
 std::string Application::sessionDisplayLabel(size_t i) const {
-    if (i >= m_sessions.size()) return "Untitled";
+    if (i >= m_sessions.size()) return materializr::tr("Untitled");
     // Same fallback chain as projectDisplayName(): explicit name → file
     // basename → Untitled. The active tab reads the LIVE working copies;
     // inactive tabs read their stashed ones.
@@ -200,7 +200,7 @@ std::string Application::sessionDisplayLabel(size_t i) const {
                                                      : m_sessions[i]->projectPath;
     if (!name.empty()) return name;
     if (!path.empty()) return std::filesystem::path(path).filename().string();
-    return "Untitled";
+    return materializr::tr("Untitled");
 }
 
 bool Application::sessionDirty(size_t i) const {

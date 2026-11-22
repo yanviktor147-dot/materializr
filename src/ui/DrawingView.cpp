@@ -288,7 +288,7 @@ void DrawingView::renderView(const DrawingViewData& view) {
 }
 
 void DrawingView::render() {
-    ImGui::Begin("2D Drawing");
+    ImGui::Begin(materializr::tr("2D Drawing###2D Drawing"));
 
     if (!m_document) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", materializr::tr("No document loaded."));

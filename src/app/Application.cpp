@@ -4053,7 +4053,7 @@ void Application::handleViewCubeAction(int action) {
 
 std::string Application::projectDisplayName() const {
     if (!m_currentProjectName.empty()) return m_currentProjectName;
-    if (m_currentProjectPath.empty()) return "New project";
+    if (m_currentProjectPath.empty()) return materializr::tr("New project");
     std::string pn = m_currentProjectPath;
     auto slash = pn.find_last_of("/\\");
     if (slash != std::string::npos) pn = pn.substr(slash + 1);
@@ -8737,7 +8737,7 @@ void Application::run() {
                         ImGuiWindowFlags_NoFocusOnAppearing |
                         ImGuiWindowFlags_NoNav;
                     bool open = true;
-                    if (ImGui::Begin("Pick more sketches", &open, flags)) {
+                    if (ImGui::Begin(materializr::tr("Pick more sketches###Pick more sketches"),, &open, flags)) {
                         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s", materializr::tr("Loft needs at least two profiles."));
                         ImGui::TextWrapped("%s", materializr::tr("Ctrl-click the other sketches (or their regions) in loft order - as many as you like - then click Loft again."));
                     }

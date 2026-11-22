@@ -51,7 +51,8 @@ void HistoryPanel::setDocument(Document* doc) {
 
 void HistoryPanel::render() {
     m_showUndoRedo = true;   // the desktop window always shows its own row
-    ImGui::Begin("History", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin(materializr::tr("History###History"), nullptr,
+                 ImGuiWindowFlags_NoCollapse);
     renderContent();
     ImGui::End();
 }

@@ -320,7 +320,8 @@ int PropertiesPanel::getEditingStep() const {
 }
 
 void PropertiesPanel::render() {
-    ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin(materializr::tr("Properties###Properties"), nullptr,
+                 ImGuiWindowFlags_NoCollapse);
     renderContent();
     ImGui::End();
 }

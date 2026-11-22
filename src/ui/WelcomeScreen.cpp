@@ -24,7 +24,7 @@ WelcomeScreen::Action WelcomeScreen::render() {
     // Guarded reopen: a raw OpenPopup-every-frame stomps any other popup at
     // the same stack level (see the Application render site: Welcome also
     // yields to the startup modals for the same reason).
-    if (!ImGui::IsPopupOpen("Welcome")) ImGui::OpenPopup("Welcome");
+    if (!ImGui::IsPopupOpen("Welcome###Welcome")) ImGui::OpenPopup("Welcome###Welcome");
 
     // Cond_Always, not Appearing: on iOS the window can first appear on a
     // frame with a degenerate viewport (splash → UI handoff), and an
@@ -36,7 +36,7 @@ WelcomeScreen::Action WelcomeScreen::render() {
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(uiSz(440, 0).x, 0.0f), ImGuiCond_Appearing);
 
-    if (ImGui::BeginPopupModal("Welcome", &m_visible,
+    if (ImGui::BeginPopupModal("Welcome###Welcome", &m_visible,
                                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                    ImGuiWindowFlags_AlwaysAutoResize)) {
 
@@ -49,7 +49,7 @@ WelcomeScreen::Action WelcomeScreen::render() {
         ImGui::GetFont()->Scale = origScale;
         ImGui::PopFont();
 
-        std::string verLine = std::string("Version ") + MATERIALIZR_VERSION;
+        std::string verLine = materializr::trFormat("Version %s", MATERIALIZR_VERSION);
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(verLine.c_str()).x) * 0.5f);
         ImGui::Text("%s", verLine.c_str());
 
@@ -77,7 +77,8 @@ WelcomeScreen::Action WelcomeScreen::render() {
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.85f, 0.74f, 0.00f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.10f, 0.10f, 0.10f, 1.0f));
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - btnW) * 0.5f);
-        if (ImGui::Button(working ? "Contacting the App Store..." : "Support Materializr",
+        if (ImGui::Button(working ? materializr::tr("Contacting the App Store...")
+                                  : materializr::tr("Support Materializr"),
                           ImVec2(btnW, 0))) {
             iosStoreBuySupporter();
         }
@@ -121,13 +122,17 @@ WelcomeScreen::Action WelcomeScreen::render() {
 #if defined(MZ_IOS)
         // Restore path Apple requires for non-consumables: re-delivers the
         // Supporter purchase after a reinstall or on a new device.
-        const char* restore = "Already a supporter? Restore purchase";
+        const std::string restoreS =
+            materializr::tr("Already a supporter? Restore purchase");
+        const char* restore = restoreS.c_str();
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(restore).x) * 0.5f);
         ImGui::TextDisabled("%s", restore);
         if (ImGui::IsItemClicked()) iosStoreRestore();
 #else
         // Honor-system Supporter switch: silences the prompt permanently.
-        const char* already = "I already support - don't show this again";
+        const std::string alreadyS =
+            materializr::tr("I already support - don't show this again");
+        const char* already = alreadyS.c_str();
         ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(already).x) * 0.5f);
         ImGui::TextDisabled("%s", already);
         if (ImGui::IsItemClicked()) {

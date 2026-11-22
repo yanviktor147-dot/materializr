@@ -67,12 +67,13 @@ void StatusBar::render() {
 
         // Project name first - the thing people most want to confirm.
         ImGui::Text(materializr::tr("Project: %s"),
-                    m_projectName.empty() ? "New project"
+                    m_projectName.empty() ? materializr::tr("New project")
                                           : m_projectName.c_str());
         ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
 
         char bodiesText[64];
-        std::snprintf(bodiesText, sizeof(bodiesText), "Bodies: %d", bodyCount);
+        std::snprintf(bodiesText, sizeof(bodiesText),
+                      materializr::tr("Bodies: %d"), bodyCount);
         ImGui::Text("%s", bodiesText);
 
         // Selection info
@@ -114,7 +115,9 @@ void StatusBar::render() {
             }
 
             char selText[128];
-            std::snprintf(selText, sizeof(selText), "Selection: %s (%d)", typeName, count);
+            std::snprintf(selText, sizeof(selText),
+                      materializr::tr("Selection: %s (%d)"),
+                      materializr::tr(typeName), count);
             ImGui::Text("%s", selText);
         } else {
             ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", materializr::tr("Selection: None"));
@@ -126,7 +129,8 @@ void StatusBar::render() {
         ImGui::SameLine();
 
         char toolText[128];
-        std::snprintf(toolText, sizeof(toolText), "Tool: %s", m_currentTool.c_str());
+        std::snprintf(toolText, sizeof(toolText), materializr::tr("Tool: %s"),
+                      materializr::tr(m_currentTool.c_str()));
         ImGui::Text("%s", toolText);
 
         // Sketch mode indicator

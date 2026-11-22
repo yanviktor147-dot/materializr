@@ -4584,6 +4584,115 @@ for _en, _ru in RU_GAPS.items():
     else:
         CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
 
+
+# ---- Gap-fill round 2 ----
+RU_GAPS2 = {
+    "1-finger drag": "протяжка одним пальцем",
+    "2-finger drag": "протяжка двумя пальцами",
+    "2D Drawing###2D Drawing": "2D-чертёж###2D Drawing",
+    "Add to sel.": "Добавить к выдел.",
+    "Add to selection": "Добавить к выделению",
+    "Already a supporter? Restore purchase": "Уже поддерживаете? Восстановить покупку",
+    "Alt+Drag": "Alt+протяжка",
+    "Bodies: %d": "Тел: %d",
+    "Body": "Тело",
+    "Box-select": "Рамка",
+    "Buttons": "кнопки",
+    "Click": "щелчок",
+    "Contacting the App Store...": "Соединяюсь с App Store...",
+    "Context menu": "Контекстное меню",
+    "Ctrl+Click": "Ctrl+щелчок",
+    "Delete selected": "Удалить выбранное",
+    "Dimension": "Размер",
+    "Double-click": "двойной щелчок",
+    "Drag empty space": "протяжка по пустому месту",
+    "Draw": "Рисование",
+    "Face": "Грань",
+    "Finish / Cancel": "Завершить / отменить",
+    "Finish / cancel": "Завершить / отмена",
+    "History###History": "История###History",
+    "Hold ▸ Body": "удержание ▸ Тело",
+    "I already support - don't show this again": "Я уже поддерживаю — не показывать снова",
+    "Interactions###Interactions": "Взаимодействия###Interactions",
+    "Items###Items": "Элементы###Items",
+    "Long-press": "долгое нажатие",
+    "Move toggle": "переключатель Перем.",
+    "Multi-Select": "Мульти-выделение",
+    "Multi-Select: Off": "Мульти-выделение: выкл",
+    "Multi-Select: On": "Мульти-выделение: вкл",
+    "Nav lock": "Блок. навигации",
+    "New project": "Новый проект",
+    "Orbit": "Вращение",
+    "Pan": "Сдвиг",
+    "Pick a base plane / face": "Выберите базовую плоскость / грань",
+    "Pinch": "щипок",
+    "Properties###Properties": "Свойства###Properties",
+    "Reset view": "Сбросить вид",
+    "Scroll wheel": "колесо мыши",
+    "Select behind": "Выбрать скрытое",
+    "Select body": "Выбрать тело",
+    "Select face": "Выбрать грань",
+    "Slow double-click": "медленный двойной щелчок",
+    "Start": "Начало",
+    "Support Materializr": "Поддержать Materializr",
+    "Tap": "касание",
+    "Tap + type": "касание + ввод",
+    "Tap or drag": "касание или протяжка",
+    "Tool: %s": "Инструмент: %s",
+    "Type value + Enter": "введите значение + Enter",
+    "Undo / Redo": "Отмена / повтор",
+    "Undo / redo": "Отмена / повтор",
+    "Untitled": "Без имени",
+    "Version %s": "Версия %s",
+    "View menu": "меню Вид",
+    "Welcome###Welcome": "Добро пожаловать###Welcome",
+    "Zoom": "Масштаб",
+}
+
+for _en, _ru in RU_GAPS2.items():
+    for _entry in CAT:
+        if _entry[0] == _en:
+            if not _entry[1].get("ru"):
+                _entry[1]["ru"] = _ru
+            break
+    else:
+        CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
+
+
+# ---- Gap-fill round 3 (dialog titles, status bar) ----
+RU_GAPS3 = {
+    "Selection: %s (%d)": "Выделение: %s (%d)",
+    "Boundary Fill###Boundary Fill": "Заполнение контура",
+    "Calibrate Image Scale###Calibrate Image Scale": "Калибровка масштаба изображения",
+    "Construction Axis###Construction Axis": "Вспомогательная ось",
+    "Construction Plane###Construction Plane": "Вспомогательная плоскость",
+    "Flat Pattern###Flat Pattern": "Развёртка",
+    "Import STL###Import STL": "Импорт STL",
+    "Import SVG###Import SVG": "Импорт SVG",
+    "Lay Flat on Plane###Lay Flat on Plane": "Уложить на плоскость",
+    "Loft###Loft": "Лофт",
+    "Mesh Trace###Mesh Trace": "Трассировка сетки",
+    "Mirror###Mirror": "Зеркало",
+    "Offset###Offset": "Смещение",
+    "Patch###Patch": "Заплатка",
+    "Pick more sketches###Pick more sketches": "Выбрать ещё эскизы",
+    "Reference Image###Reference Image": "Опорное изображение",
+    "Rotate Plane About Axis###Rotate Plane About Axis": "Поворот плоскости вокруг оси",
+    "Section View###Section View": "Сечение",
+    "Set Up Tracing Planes###Set Up Tracing Planes": "Настройка секущих плоскостей",
+    "Text###Text": "Текст",
+    "Thread###Thread": "Резьба",
+}
+
+for _en, _ru in RU_GAPS3.items():
+    for _entry in CAT:
+        if _entry[0] == _en:
+            if not _entry[1].get("ru"):
+                _entry[1]["ru"] = _ru
+            break
+    else:
+        CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
+
 def cstr(s):
     """C string literal with non-ASCII as explicit \\xNN UTF-8 bytes.
 

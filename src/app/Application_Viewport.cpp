@@ -7106,7 +7106,8 @@ void Application::renderViewport() {
                         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.16f, 0.40f, 0.75f, 1.0f));
                         pops = 3;
                     }
-                    if (wideButton(m_multiSelectToggle ? "Multi-Select: On" : "Multi-Select: Off"))
+                    if (wideButton(m_multiSelectToggle ? materializr::tr("Multi-Select: On")
+                                   : materializr::tr("Multi-Select: Off")))
                         m_multiSelectToggle = !m_multiSelectToggle;
                     bool hov = ImGui::IsItemHovered();
                     if (pops) ImGui::PopStyleColor(pops);

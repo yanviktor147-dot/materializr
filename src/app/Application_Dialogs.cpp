@@ -1518,7 +1518,8 @@ void Application::renderInteractionsPanel() {
     // camera rows reflect the live mouse bindings chosen in File > Settings.
     // No collapse handle - Settings > Panels owns show/hide now, so the per-window
     // minimize is just wasted title-bar space.
-    ImGui::Begin("Interactions", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin(materializr::tr("Interactions###Interactions"), nullptr,
+                 ImGuiWindowFlags_NoCollapse);
     // Action label in a fixed left column, keys to its right. Keeping the action
     // first (it's short) means a long key string extends rightward instead of
     // overlapping the label.
@@ -1529,10 +1530,11 @@ void Application::renderInteractionsPanel() {
     // needs the least width.
     const bool touchRagged = materializr::touchMode();
     auto row = [touchRagged](const char* action, const char* keys) {
-        ImGui::TextUnformatted(action);
+        ImGui::TextUnformatted(materializr::tr(action));
         if (touchRagged) ImGui::SameLine();
         else             ImGui::SameLine(120.0f);
-        ImGui::TextColored(materializr::accentText(), "%s", keys);
+        ImGui::TextColored(materializr::accentText(), "%s",
+                           materializr::tr(keys));
     };
     if (materializr::touchMode()) {
     // Touch gesture reference. The mouse/keyboard legend is nonsense on a bare
@@ -2057,7 +2059,7 @@ void Application::renderThreadPanel() {
                                     ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(280, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Thread", nullptr,
+    ImGui::Begin(materializr::tr("Thread###Thread"),, nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_AlwaysAutoResize);
@@ -2240,7 +2242,7 @@ void Application::renderLoftPanel() {
                                     ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(280, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Loft", nullptr,
+    ImGui::Begin(materializr::tr("Loft###Loft"),, nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_AlwaysAutoResize);
@@ -2706,7 +2708,7 @@ void Application::renderMeshTracePanel() {
                                    ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(300, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Mesh Trace", nullptr,
+    ImGui::Begin(materializr::tr("Mesh Trace###Mesh Trace"),, nullptr,
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize);
     ImGui::TextColored(materializr::accentText(), "%s",
@@ -2730,7 +2732,7 @@ void Application::renderMeshTraceSetupDialog() {
                                    ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(300, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Set Up Tracing Planes", nullptr,
+    ImGui::Begin(materializr::tr("Set Up Tracing Planes###Set Up Tracing Planes"),, nullptr,
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -2832,7 +2834,7 @@ void Application::renderRefImagePanel() {
                                    ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(300, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Reference Image", nullptr,
+    ImGui::Begin(materializr::tr("Reference Image###Reference Image"),, nullptr,
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -2960,7 +2962,7 @@ void Application::renderRefImageCalibrationPopup(int planeId) {
 
     bool calibOpen = true;
     ImGui::SetNextWindowSize(uiSz(540, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Calibrate Image Scale", &calibOpen,
+    ImGui::Begin(materializr::tr("Calibrate Image Scale###Calibrate Image Scale"),, &calibOpen,
                  ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -3123,7 +3125,7 @@ void Application::renderBoundaryFillPanel() {
                                     ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(280, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Boundary Fill", nullptr,
+    ImGui::Begin(materializr::tr("Boundary Fill###Boundary Fill"),, nullptr,
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -3161,7 +3163,7 @@ void Application::renderPatchPanel() {
                                    ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(300, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Patch", nullptr,
+    ImGui::Begin(materializr::tr("Patch###Patch"),, nullptr,
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -3697,7 +3699,7 @@ void Application::renderConstructionPlanePanel() {
                                     ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(280, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Construction Plane", nullptr,
+    ImGui::Begin(materializr::tr("Construction Plane###Construction Plane"),, nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_AlwaysAutoResize);
@@ -4382,7 +4384,7 @@ void Application::renderAlignFacePopup() {
     ImGui::SetNextWindowPos(ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - 360,
                                     ImGui::GetWindowPos().y + 50), ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(360, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Lay Flat on Plane", nullptr,
+    ImGui::Begin(materializr::tr("Lay Flat on Plane###Lay Flat on Plane"),, nullptr,
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -4531,7 +4533,7 @@ void Application::renderRotatePlaneAboutAxisPopup() {
                                     ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(340, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Rotate Plane About Axis", nullptr,
+    ImGui::Begin(materializr::tr("Rotate Plane About Axis###Rotate Plane About Axis"),, nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_AlwaysAutoResize);
@@ -4887,7 +4889,7 @@ void Application::renderConstructionAxisPanel() {
                                     ImGui::GetWindowPos().y + 50),
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(280, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Construction Axis", nullptr,
+    ImGui::Begin(materializr::tr("Construction Axis###Construction Axis"),, nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_AlwaysAutoResize);
@@ -4987,7 +4989,7 @@ void Application::renderSectionPanel() {
         ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
     ImGui::SetNextWindowBgAlpha(0.92f);
     bool open = true;
-    if (ImGui::Begin("Section View", &open,
+    if (ImGui::Begin(materializr::tr("Section View###Section View"),, &open,
                      ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoSavedSettings)) {
         static const char* kWorldNames[3] = {
@@ -5090,7 +5092,7 @@ void Application::renderTextToolPanel() {
         ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
     ImGui::SetNextWindowBgAlpha(0.92f);
     bool open = true;
-    if (ImGui::Begin("Text", &open,
+    if (ImGui::Begin(materializr::tr("Text###Text"),, &open,
                      ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoSavedSettings)) {
         // The string buffer lives here; the tool consumes the committed
@@ -5360,7 +5362,7 @@ void Application::renderSvgToolPanel() {
         ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
     ImGui::SetNextWindowBgAlpha(0.92f);
     bool open = true;
-    if (ImGui::Begin("Import SVG", &open,
+    if (ImGui::Begin(materializr::tr("Import SVG###Import SVG"),, &open,
                      ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoSavedSettings)) {
         const auto& svg = m_sketchTool->getSvgPaths();
@@ -5432,7 +5434,7 @@ void Application::renderMirrorToolPanel() {
         ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
     ImGui::SetNextWindowBgAlpha(0.92f);
     bool open = true;
-    if (ImGui::Begin("Mirror", &open,
+    if (ImGui::Begin(materializr::tr("Mirror###Mirror"),, &open,
                      ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::TextDisabled(materializr::touchMode()
@@ -5524,7 +5526,7 @@ void Application::renderOffsetToolPanel() {
         ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.0f));
     ImGui::SetNextWindowBgAlpha(0.92f);
     bool open = true;
-    if (ImGui::Begin("Offset", &open,
+    if (ImGui::Begin(materializr::tr("Offset###Offset"),, &open,
                      ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoSavedSettings)) {
         // Wrap the hints at a fixed width. Auto-resize otherwise sizes the
@@ -5791,7 +5793,7 @@ void Application::renderStlImportDialog() {
                ImGui::GetWindowPos().y + 50),
         ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(300, 0), ImGuiCond_Appearing);
-    ImGui::Begin("Import STL", nullptr,
+    ImGui::Begin(materializr::tr("Import STL###Import STL"),, nullptr,
                  ImGuiWindowFlags_NoResize |
                  ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_AlwaysAutoResize);
@@ -6294,7 +6296,7 @@ void Application::renderUnfoldDialog() {
     if (!m_unfoldDialogActive || !m_unfoldPattern) return;
 
     ImGui::SetNextWindowSize(uiSz(560, 580), ImGuiCond_Appearing);
-    if (!ImGui::Begin("Flat Pattern", &m_unfoldDialogActive,
+    if (!ImGui::Begin(materializr::tr("Flat Pattern###Flat Pattern"),, &m_unfoldDialogActive,
                       ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::End();
         return;

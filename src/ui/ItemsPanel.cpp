@@ -72,7 +72,8 @@ void ItemsPanel::applyRowClick(const SelectionEntry& entry) {
 }
 
 bool ItemsPanel::render() {
-    ImGui::Begin("Items", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin(materializr::tr("Items###Items"), nullptr,
+                 ImGuiWindowFlags_NoCollapse);
     const bool changed = renderContent();
     ImGui::End();
     return changed;
