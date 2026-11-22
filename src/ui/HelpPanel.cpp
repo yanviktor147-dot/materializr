@@ -11,9 +11,9 @@ namespace {
 // One section heading + a wrapped paragraph below it. Keeps the layout uniform.
 void section(const char* title, const char* body) {
     ImGui::Spacing();
-    ImGui::TextColored(materializr::accentText(), "%s", title);
+    ImGui::TextColored(materializr::accentText(), "%s", materializr::tr(title));
     ImGui::Separator();
-    ImGui::TextWrapped("%s", body);
+    ImGui::TextWrapped("%s", materializr::tr(body));
     ImGui::Spacing();
 }
 
@@ -27,7 +27,7 @@ void HelpPanel::render() {
         ImGui::SetNextWindowFocus();
         m_raise = false;
     }
-    if (!ImGui::Begin("User Guide", &m_visible)) { ImGui::End(); return; }
+    if (!ImGui::Begin(materializr::tr("User Guide"), &m_visible)) { ImGui::End(); return; }
 
     ImGui::TextWrapped("%s", materializr::tr("Welcome to Materializr - a parametric 3D CAD app. This guide covers the basics so you can get something on screen quickly. Camera controls and key bindings can be changed in File → Settings."));
 
@@ -70,7 +70,7 @@ void HelpPanel::render() {
     section("Move / Rotate / Scale",
         "Select a body (or several) and pick the Move, Rotate or Scale gizmo "
         "from the toolbar. Drag a handle to transform. Rotate snaps softly to "
-        "45°; Scale snaps to 1%% and shows a live readout. Scale has a "
+        "45°; Scale snaps to 1% and shows a live readout. Scale has a "
         "side panel for typed per-axis values and a uniform-scale checkbox.");
 
     section("History",

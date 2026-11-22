@@ -341,7 +341,7 @@ static void launchInAppBrowser(const std::string& title, bool isSave,
     }
     s_state.open = true;
     s_state.isSave = isSave;
-    s_state.title = title.empty() ? (isSave ? "Save File" : "Open File") : title;
+    s_state.title = title.empty() ? (isSave ? materializr::tr("Save File") : materializr::tr("Open File")) : title;
     s_state.currentDir = start;
     std::strncpy(s_state.pathBuf, start.c_str(), sizeof(s_state.pathBuf) - 1);
     s_state.pathBuf[sizeof(s_state.pathBuf) - 1] = '\0';

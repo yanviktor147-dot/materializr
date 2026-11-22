@@ -192,9 +192,12 @@ LandingPage::Action LandingPage::render() {
     ImGui::TextColored(dimText(), "v" MATERIALIZR_VERSION);
 
     {
-        const char* openLbl = ICON_IC_FOLDER "  Open File...";
-        const char* helpLbl = ICON_IC_HELP_CIRCLE "  Help";
-        const char* gearLbl = ICON_IC_SETTINGS "  Settings";
+        const std::string openLblS = std::string(ICON_IC_FOLDER) + "  " + materializr::tr("Open File...");
+        const std::string helpLblS = std::string(ICON_IC_HELP_CIRCLE) + "  " + materializr::tr("Help");
+        const std::string gearLblS = std::string(ICON_IC_SETTINGS) + "  " + materializr::tr("Settings");
+        const char* openLbl = openLblS.c_str();
+        const char* helpLbl = helpLblS.c_str();
+        const char* gearLbl = gearLblS.c_str();
         const char* backLbl = ICON_IC_XMARK;
         const ImGuiStyle& style = ImGui::GetStyle();
         int nBtns = m_canDismiss ? 4 : 3;
@@ -237,8 +240,9 @@ LandingPage::Action LandingPage::render() {
         else col = 0;
     };
 
-    if (tile("new", "New Project", 0, ICON_IC_PLUS, tileW, previewH,
-             "Start an empty project", false) == TileAct::Click)
+    if (tile("new", materializr::tr("New Project"), 0, ICON_IC_PLUS, tileW,
+             previewH,
+             materializr::tr("Start an empty project"), false) == TileAct::Click)
         action.type = ActionType::NewProject;
     nextCell();
 

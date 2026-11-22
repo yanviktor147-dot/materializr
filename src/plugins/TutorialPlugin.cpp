@@ -261,13 +261,6 @@ void renderLanguagePage(bool& close) {
     }
 
     ImGui::Spacing();
-    // Honest about the state of the work: the tool and menu names are
-    // translated, the long help text mostly is not. Better to say so than to
-    // let someone conclude the translation is broken.
-    ImGui::PushTextWrapPos(0.0f);
-    ImGui::TextDisabled("%s", materializr::tr("Menus and tool names are translated. "
-                                 "Some longer help text is still English."));
-    ImGui::PopTextWrapPos();
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -301,7 +294,7 @@ void renderLayoutPicker(bool& close) {
         ImVec2 pad = ImGui::GetStyle().FramePadding;
         const float wrapW = ImGui::GetContentRegionAvail().x - 2.0f * pad.x
                             - uiW(28.0f);
-        ImVec2 blurbSz = ImGui::CalcTextSize(kLayouts[i].blurb, nullptr,
+        ImVec2 blurbSz = ImGui::CalcTextSize(materializr::tr(kLayouts[i].blurb), nullptr,
                                              false, wrapW);
         const float cardH = ImGui::GetTextLineHeightWithSpacing() +
                             blurbSz.y + 3.0f * pad.y;
@@ -321,12 +314,12 @@ void renderLayoutPicker(bool& close) {
             dl->AddCircleFilled(c, uiW(3.2f),
                                 ImGui::GetColorU32(ImGuiCol_CheckMark));
         ImVec2 txt(tl.x + pad.x + uiW(22.0f), tl.y + pad.y);
-        dl->AddText(txt, ImGui::GetColorU32(ImGuiCol_Text), kLayouts[i].name);
+        dl->AddText(txt, ImGui::GetColorU32(ImGuiCol_Text), materializr::tr(kLayouts[i].name));
         ImVec2 blurbPos(txt.x + uiW(6.0f),
                         txt.y + ImGui::GetTextLineHeightWithSpacing());
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), blurbPos,
                     ImGui::GetColorU32(ImGuiCol_TextDisabled),
-                    kLayouts[i].blurb, nullptr, wrapW);
+                    materializr::tr(kLayouts[i].blurb), nullptr, wrapW);
         ImGui::PopID();
         ImGui::Spacing();
     }
@@ -381,7 +374,8 @@ void renderTutorial(materializr::PluginContext&) {
                                         ImVec2(FLT_MAX, vp->WorkSize.y * 0.92f));
 
     bool keepOpen = true;
-    if (ImGui::Begin("Getting Started###Tutorial", &keepOpen,
+    const std::string tutTitle = std::string(materializr::tr("Getting Started")) + "###Tutorial";
+    if (ImGui::Begin(tutTitle.c_str(), &keepOpen,
                      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse |
                      ImGuiWindowFlags_NoMove)) {
         if (g_onLanguage) {
@@ -402,10 +396,10 @@ void renderTutorial(materializr::PluginContext&) {
         }
 
         ImGui::TextDisabled(materializr::tr("Step %d of %d"), g_step + 1, kStepCount);
-        ImGui::SeparatorText(s.title);
+        ImGui::SeparatorText(materializr::tr(s.title));
 
         ImGui::PushTextWrapPos(0.0f); // wrap at the window's right edge
-        ImGui::TextUnformatted(s.body);
+        ImGui::TextUnformatted(materializr::tr(s.body));
 
         // Layout-specific location line: where to find this in the layout the
         // user picked on the first page. Highlighted - it's the line that makes
@@ -416,7 +410,8 @@ void renderTutorial(materializr::PluginContext&) {
                 ImGui::Spacing();
                 ImGui::PushStyleColor(ImGuiCol_Text,
                                       ImVec4(0.55f, 0.90f, 0.70f, 1.0f));
-                ImGui::TextWrapped(materializr::tr("In this layout:  %s"), s.where[li]);
+                ImGui::TextWrapped(materializr::tr("In this layout:  %s"),
+                    materializr::tr(s.where[li]));
                 ImGui::PopStyleColor();
             }
         }
@@ -435,8 +430,8 @@ void renderTutorial(materializr::PluginContext&) {
                 ImGui::PopStyleColor();
             };
             // Active input first so the reader sees the relevant one immediately.
-            if (touch) { guide("Touch:", s.touch, true);  guide("Mouse:", s.mouse, false); }
-            else       { guide("Mouse:", s.mouse, true);  guide("Touch:", s.touch, false); }
+            if (touch) { guide(materializr::tr("Touch:"), materializr::tr(s.touch), true);  guide(materializr::tr("Mouse:"), materializr::tr(s.mouse), false); }
+            else       { guide(materializr::tr("Mouse:"), materializr::tr(s.mouse), true);  guide(materializr::tr("Touch:"), materializr::tr(s.touch), false); }
         }
         ImGui::PopTextWrapPos();
 
@@ -450,7 +445,7 @@ void renderTutorial(materializr::PluginContext&) {
             else            g_onPicker = true;   // back to the layout picker
         }
         ImGui::SameLine();
-        if (ImGui::Button(last ? "Finish" : "Next", uiSz(80, 0))) {
+        if (ImGui::Button(last ? materializr::tr("Finish") : materializr::tr("Next"), uiSz(80, 0))) {
             if (last) close();
             else      g_step++;
         }
@@ -459,7 +454,7 @@ void renderTutorial(materializr::PluginContext&) {
         const float rightX = ImGui::GetWindowContentRegionMax().x - skipW;
         if (rightX > ImGui::GetCursorPosX()) ImGui::SameLine(rightX);
         else                                 ImGui::SameLine();
-        if (ImGui::Button(last ? "Close" : "Skip", uiSz(80, 0))) close();
+        if (ImGui::Button(last ? materializr::tr("Close") : materializr::tr("Skip"), uiSz(80, 0))) close();
     }
     ImGui::End();
 

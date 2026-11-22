@@ -4492,6 +4492,98 @@ RU = {
 for en, tr in CAT:
     tr["ru"] = RU.get(en, "")
 
+
+# ---- Gap-fill keys (hardcoded strings wrapped in tr()) ----
+RU_GAPS = {
+    "Built for fingers. A full-screen model with floating buttons and big touch targets. Made for tablets.": "Создан для пальцев: полноэкранный режим с плавающими кнопками и крупными целями касания. Сделан для планшетов.",
+    "Classic": "Классический",
+    "Clean and focused. A tool rail on the left, tabbed panels on the right, everything else out of the way. Great on any screen.": "Чисто и по делу: панель инструментов слева, панели с вкладками справа, всё лишнее убрано. Хорош на любом экране.",
+    "Click a body, face or edge to select it - most tools act on the current selection. A small context menu gives quick actions on whatever you're pointing at.": "Щёлкните тело, грань или ребро, чтобы выделить — большинство инструментов действуют на текущее выделение. Небольшое контекстное меню даёт быстрые действия над тем, на что вы указали.",
+    "Click to place points; press Enter to finish a shape, Esc to cancel.": "Щелчок ставит точки; Enter завершает фигуру, Esc отменяет.",
+    "Click to select, Ctrl+click to add more. Right-click for the context menu.": "Щелчок — выделить, Ctrl+щелчок — добавить. Правый щелчок — контекстное меню.",
+    "Ctrl+S saves; the project includes bodies, colours, sketches and the operation history. Settings → Autosave enables a periodic re-save once the project has a file on disk. Application preferences (theme, mouse buttons, orbit mode) are stored separately under your user config directory so they follow you between projects.": "Ctrl+S сохраняет; проект включает тела, цвета, эскизы и историю операций. Настройки → Автосохранение включает периодическое пересохранение, когда у проекта есть файл на диске. Настройки приложения (тема, кнопки мыши, режим орбиты) хранятся отдельно в каталоге конфигурации пользователя и переносятся между проектами.",
+    "Ctrl+Tab cycles the open tabs. File > Home Screen shows the grid.": "Ctrl+Tab переключает открытые вкладки. Файл > Главный экран показывает сетку.",
+    "Desktop-style. A menu bar on top and every panel visible at once. Best with a mouse and keyboard.": "Классический настольный вид: строка меню сверху, все панели видны одновременно. Лучше всего с мышью и клавиатурой.",
+    "Drag one finger to orbit; use two fingers to pan and pinch-zoom.": "Один палец — вращение; двумя пальцами — сдвиг и щипок для масштаба.",
+    "Drag the middle mouse button to orbit, the right button to pan, and the scroll wheel to zoom. The cube in the top-right is a navigation widget: click a face for an orthographic view, click a corner dot for an isometric view, click an arrow for a 90° rotation, or drag the cube itself to free-orbit. Reset the camera with Home or View → Reset Camera.": "Тяните среднюю кнопку мыши для вращения, правую — для сдвига, колесо — для масштаба. Куб в правом верхнем углу — навигационный виджет: щёлкните грань для ортогонального вида, угловую точку — для изометрии, стрелку — для поворота на 90°, или тяните сам куб для свободного вращения. Сброс камеры — Home или Вид → Сбросить камеру.",
+    "Each project opens in its own tab, with its own history and camera - handy for copying a part from one design into another. The home screen lists your recent projects with a picture of each; it doesn't close what you're working on, so you can go and come back.": "Каждый проект открывается в своей вкладке со своей историей и камерой — удобно копировать деталь из одного проекта в другой. Главный экран показывает недавние проекты с картинкой каждого; он не закрывает текущую работу, так что можно уйти и вернуться.",
+    "Every modelling step goes into History on the right. Click a step to edit its parameters in Properties; right-click for Delete, Disable, Set Breakpoint, or Edit. Click a fillet/chamfer face in the viewport to jump straight to its history step. Reloaded projects show steps marked (reloaded) - undo/redo still walks through them but their parameters can't be re-edited.": "Каждый шаг моделирования попадает в Историю справа. Щёлкните шаг, чтобы изменить его параметры в Свойствах; правый щелчок — Удалить, Отключить, Точка останова или Изменить. Щёлкните грань скругления/фаски в окне, чтобы сразу перейти к её шагу истории. В перезагруженных проектах шаги помечены (перезагружено) — отмена/повтор по ним ходит, но параметры уже не изменить.",
+    "Every operation is recorded in the history. Materializr is parametric, so you can go back and change an earlier step: click a history entry to edit its parameters and the whole model rebuilds.": "Каждая операция попадает в историю. Materializr параметрический: можно вернуться и изменить ранний шаг — щёлкните запись истории, поправьте параметры, и модель перестроится.",
+    "From sketch to solid": "От эскиза к телу",
+    "History": "История",
+    "History and undo": "История и отмена",
+    "History is the second tab of the right panel.": "История — вторая вкладка правой панели.",
+    "Items is the first tab of the right panel; saving and exporting live under the … menu > File.": "Элементы — первая вкладка правой панели; сохранение и экспорт — в меню … > Файл.",
+    "Long-press an item to move it into a folder. Export offers Share (send to another app) or save-to-file.": "Долгое нажатие на элемент переносит его в папку. Экспорт предлагает Поделиться (отправить в другое приложение) или сохранить в файл.",
+    "Materializr is a parametric 3D CAD app: sketch a 2D shape, turn it into a solid, then keep refining it. This quick tour covers the essentials - it takes a minute. You can reopen it anytime from Help > Getting Started.": "Materializr — параметрическое 3D-CAD-приложение: рисуете 2D-эскиз, превращаете его в тело и продолжаете дорабатывать. Этот короткий тур охватывает основы — займёт минуту. Вернуться к нему можно в любой момент: Справка > Первые шаги.",
+    "Modelling from a sketch": "Моделирование из эскиза",
+    "Modern": "Современный",
+    "Mouse:": "Мышь:",
+    "Move / Rotate / Scale": "Перемещение / Поворот / Масштаб",
+    "Moving the view": "Управление видом",
+    "Navigating the viewport": "Навигация в окне просмотра",
+    "Need more room?": "Нужно больше места?",
+    "Open File...": "Открыть файл...",
+    "Orbit, pan and zoom to look at your model from any angle. The cube in the top-right corner snaps to standard views, and Frame Selection (F) zooms onto whatever is selected.": "Вращайте, сдвигайте и приближайте модель с любого ракурса. Куб в правом верхнем углу привязывается к стандартным видам, а Подогнать по выделению (F) приближает к выделенному.",
+    "Orbit, pan and zoom with the mouse buttons and wheel (set them in Settings). The Interactions panel always lists the current bindings.": "Вращение, сдвиг и масштаб — кнопками и колесом мыши (настраиваются в Настройках). Панель Взаимодействия всегда показывает текущие привязки.",
+    "Organize, save and export": "Упорядочивание, сохранение и экспорт",
+    "Pick Sketch on XY/XZ/YZ from the Tools panel (or Sketch on Face after selecting one), then choose a tool: Line, Rectangle, Circle, Arc, Spline, Polygon, Trim, or Offset. Type a numeric dimension while placing to lock the size. Offset takes a whole connected chain: click one edge and the run it belongs to is highlighted, then move the cursor (the side you are on picks the direction) or type the distance. Press D for the Dimension tool: click a line, circle, two points, or two lines (parallel = distance, angled = angle), click to place the label, then type the value. Switch to Select / Move to drag existing points and lines - double-click empties to select the whole sketch, then use Copy / Mirror / Rotate. Click Finish Sketch (or press Enter) to exit.": "Выберите Эскиз на XY/XZ/YZ в панели инструментов (или Эскиз на грани, выбрав грань), затем инструмент: Линия, Прямоугольник, Окружность, Дуга, Сплайн, Многоугольник, Обрезка или Смещение. Число при построении фиксирует размер. Смещение берёт всю связанную цепочку: щёлкните ребро — подсветится принадлежащая ему цепочка, затем ведите курсор (сторона, где вы, задаёт направление) или введите расстояние. D — инструмент Размер: щёлкните линию, окружность, две точки или две линии (параллельные — расстояние, наклонные — угол), поставьте метку, введите значение. Переключитесь в Выделение / Перемещение, чтобы тянуть точки и линии; двойной щелчок по пустому месту выделяет весь эскиз, затем Копировать / Зеркало / Повернуть. Завершите эскиз (или нажмите Enter).",
+    "Press F9 (or View > Hide Panels) to collapse the side panels.": "Нажмите F9 (или Вид > Скрыть панели), чтобы свернуть боковые панели.",
+    "Right-click an item to move it into a folder. Export lives under File > Export.": "Правый щелчок по элементу переносит его в папку. Экспорт — в меню Файл > Экспорт.",
+    "Save File": "Сохранить файл",
+    "Saving and autosave": "Сохранение и автосохранение",
+    "Select a body (or several) and pick the Move, Rotate or Scale gizmo from the toolbar. Drag a handle to transform. Rotate snaps softly to 45°; Scale snaps to 1% and shows a live readout. Scale has a side panel for typed per-axis values and a uniform-scale checkbox.": "Выберите тело (или несколько) и возьмите Перемещение, Поворот или Масштаб на панели инструментов. Тяните рукоять для преобразования. Поворот мягко привязывается к 45°; масштаб — к 1% с показом значения на лету. У масштаба есть боковая панель для значений по осям и флажок равномерного масштаба.",
+    "Select something and a floating tool dock appears along the left edge.": "Выберите что-нибудь — и вдоль левого края появится плавающая панель инструментов.",
+    "Select something and the left rail fills with the tools that apply (Push, Extrude, Shell...).": "Выберите что-нибудь — и левая панель заполнится подходящими инструментами (Протянуть, Вытянуть, Оболочка...).",
+    "Selecting things": "Выделение",
+    "Several projects at once": "Несколько проектов сразу",
+    "Short on screen space? Enlarge the 3D view by folding the side panels away, then bring them back when you need them.": "Не хватает места на экране? Увеличьте 3D-вид, свернув боковые панели, и верните их, когда понадобятся.",
+    "Single-click a face or edge to select it; Ctrl+click adds to the selection. Double-click selects the whole body. Drag in empty space to box-select multiple bodies at once. Esc clears or cancels the current operation.": "Щёлкните грань или ребро, чтобы выделить; Ctrl+щелчок добавляет к выделению. Двойной щелчок выделяет всё тело. Протащите рамку по пустому месту, чтобы выделить несколько тел сразу. Esc сбрасывает или отменяет текущую операцию.",
+    "Sketching": "Эскизы",
+    "Sketching a shape": "Рисуем фигуру",
+    "Solids start as 2D sketches: pick a plane or a flat face to draw on, then lay down lines, rectangles and circles on the grid. Type a number while drawing to set an exact size, then finish the sketch.": "Тела начинаются с 2D-эскизов: выберите плоскость или плоскую грань для рисования, затем выкладывайте на сетку линии, прямоугольники и окружности. Число, введённое при рисовании, задаёт точный размер; затем завершите эскиз.",
+    "Start an empty project": "Начать пустой проект",
+    "Start from the Tools panel on the left: Sketch on XY / XZ / YZ, or select a flat face first.": "Начните с панели инструментов слева: Эскиз на XY / XZ / YZ, или сначала выберите плоскую грань.",
+    "Start from the left rail: tap \"Sketch on...\", or select a flat face and choose Sketch.": "Начните с левой панели: коснитесь «Эскиз на...», или выберите плоскую грань и выберите Эскиз.",
+    "Step %d of %d": "Шаг %d из %d",
+    "Tabs are the pills in the top bar; the + beside them opens a new one.": "Вкладки — пилюли в верхней панели; + рядом с ними открывает новую.",
+    "Tabs run along the top of the 3D view; the + opens a new one.": "Вкладки идут поверх 3D-вида; + открывает новую.",
+    "Tap the + button (bottom-right) and choose New Sketch.": "Коснитесь кнопки + (справа внизу) и выберите Новый эскиз.",
+    "Tap the History button in the bottom-left corner.": "Кнопка История — в левом нижнем углу.",
+    "Tap the list icon in the top bar for your items; saving and exporting live behind the ☰ menu.": "Коснитесь значка списка в верхней панели — там ваши элементы; сохранение и экспорт — за меню ☰.",
+    "Tap the project name to switch between open projects; the home screen is behind the menu.": "Касание имени проекта переключает открытые проекты; главный экран — за меню.",
+    "Tap the small chevron tabs on the left and right edges of the viewport to fold a column away - tap again to bring it back. The Focus button (top-right) cycles the same thing.": "Коснитесь маленьких язычков на левом и правом краях окна, чтобы свернуть колонку, — коснитесь снова, чтобы вернуть. Кнопка Фокус (справа сверху) переключает то же самое.",
+    "Tap to place points, or press-drag-release to draw a segment. Use the Finish Sketch / Exit Sketch buttons.": "Касание ставит точки, или нажмите-протяните-отпустите для отрезка. Кнопки Завершить эскиз / Выйти из эскиза.",
+    "Tap to select; use the on-screen Multi toggle to add more. Press and hold (long-press) for the context menu.": "Коснитесь, чтобы выделить; тумблер «Multi» добавляет выделение. Удержание (долгое нажатие) — контекстное меню.",
+    "That's the basics. Explore the tools, and see Help > User Guide and Keyboard Shortcuts for more detail. Have fun building.": "Это основы. Изучайте инструменты; подробнее — Справка > Руководство пользователя и Горячие клавиши. Приятного моделирования.",
+    "The History panel sits on the right side.": "Панель История — справа.",
+    "The Items panel is on the right; saving and exporting live in the File menu.": "Панель Элементы — справа; сохранение и экспорт — в меню Файл.",
+    "The Tools panel lists what applies to your selection (Face Operations, Push / Pull, Shell...).": "Панель инструментов показывает, что применимо к выделению (Операции с гранью, Протянуть / Оттянуть, Оболочка...).",
+    "The project name (top-left) opens the list of open projects.": "Имя проекта (слева сверху) открывает список открытых проектов.",
+    "Touch:": "Касание:",
+    "Turn a closed sketch into a 3D body: select it and use Push/Pull to give it depth, or Revolve to spin it around an axis. On an existing solid, Push/Pull a face to move it, or add a Fillet/Chamfer to round or bevel edges. Drag the arrow - or type a distance - to set the amount.": "Превратите замкнутый эскиз в 3D-тело: выделите его и примените Протянуть/Оттянуть для глубины или Вращение вокруг оси. На готовом теле протяните грань, чтобы сдвинуть её, или добавьте Скругление/Фаску к рёбрам. Тяните стрелку — или введите расстояние.",
+    "Undo / redo with Ctrl+Z / Ctrl+Y, or from the Edit menu.": "Отмена/повтор — Ctrl+Z / Ctrl+Y или через меню Правка.",
+    "Undo / redo with the arrows in the top bar (or a keyboard, if one is attached).": "Отмена/повтор — стрелки в верхней панели (или клавиатура, если подключена).",
+    "User Guide": "Руководство пользователя",
+    "View actions live behind the ☰ menu in the top bar.": "Действия вида — за меню ☰ в верхней панели.",
+    "View actions live in the View menu on the top menu bar.": "Действия вида — в меню Вид в верхней строке меню.",
+    "View actions live under the … menu (top-left) > View.": "Действия вида — в меню … (слева сверху) > Вид.",
+    "Welcome to Materializr": "Добро пожаловать в Materializr",
+    "With a sketch region or face selected, click Extrude or Push/Pull. An arrow gizmo appears on the face - drag it for live preview, or type a value in the popup. Negative values cut into the body. After you have a body, use Fillet or Chamfer on edges (drag the handle outward to grow the radius/distance) and Mirror / Pattern from the tools sidebar.": "Выберите область эскиза или грань и нажмите Вытянуть или Протянуть/Оттянуть. На грани появится стрелка — тяните её для предпросмотра или введите значение во всплывающем окне. Отрицательные значения врезаются в тело. Когда тело готово, применяйте Скругление или Фаску к рёбрам (тяните рукоять наружу, чтобы увеличить радиус/расстояние), а также Зеркало / Массив из боковой панели инструментов.",
+    "You're ready": "Вы готовы",
+    "Your bodies and sketches are listed so you can hide, rename and group them into folders. Save your work as a project, or export for 3D printing and other CAD tools - STL, 3MF, STEP, OBJ, glTF, IGES or BREP. Export writes every VISIBLE body to one file, so hiding a body leaves it out; to send just a few, select them, right-click and use Export.": "Тела и эскизы перечислены в списке: их можно скрывать, переименовывать и группировать в папки. Сохраняйте работу как проект или экспортируйте для 3D-печати и других CAD-программ — STL, 3MF, STEP, OBJ, glTF, IGES или BREP. Экспорт пишет все ВИДИМЫЕ тела в один файл, поэтому скрытое тело в него не попадёт; чтобы отправить несколько, выделите их, щёлкните правой кнопкой и выберите Экспорт.",
+    "im-touch is already minimal: panels appear only when something needs them and tuck away on their own.": "im-touch и так минималистичен: панели появляются лишь когда нужны и сами убираются.",
+}
+
+for _en, _ru in RU_GAPS.items():
+    for _entry in CAT:
+        if _entry[0] == _en:
+            if not _entry[1].get("ru"):
+                _entry[1]["ru"] = _ru
+            break
+    else:
+        CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
+
 def cstr(s):
     """C string literal with non-ASCII as explicit \\xNN UTF-8 bytes.
 

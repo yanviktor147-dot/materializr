@@ -157,7 +157,7 @@ void Application::renderSettings() {
     }
     // 630 wide: the keyboard-shortcut list (Navigation) needs the room.
     ImGui::SetNextWindowSize(uiSz(630, 420), ImGuiCond_Appearing);
-    if (ImGui::Begin("Settings", &m_showSettings)) {
+    if (ImGui::Begin(materializr::tr("Settings"), &m_showSettings)) {
         bool changed = false; // any change persists the settings file
 
         // Tabs share the same `changed` flag; the Apply/Close row below the
