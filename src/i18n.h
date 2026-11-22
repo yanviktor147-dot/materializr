@@ -35,6 +35,7 @@ enum class Lang { English = 0, Spanish, Portuguese, French, German, Italian, Rus
 // every frame, and ImGui 1.92 rasterises glyphs on demand, so a language change
 // needs no font or atlas work at all.
 void setLanguage(Lang l);
+std::string trFormat(const char* fmt, ...);
 // Index of the system's preferred UI language (Lang order), or -1 when
 // the platform cannot tell. Called once at startup, before the user has
 // ever chosen, to pre-select the language instead of asking.

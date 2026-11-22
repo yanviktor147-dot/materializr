@@ -1,3 +1,4 @@
+#include <cstdarg>
 #include "i18n.h"
 #include "i18n_catalogue.h"
 
@@ -87,6 +88,22 @@ bool codeEq(const char* a, const char* b) {
 }
 
 } // namespace
+
+std::string trFormat(const char* fmt, ...) {
+    // The FORMAT STRING goes through tr() first, arguments are
+    // substituted after translation; translators only see plain text.
+    const char* translated = tr(fmt);
+    va_list args;
+    va_start(args, fmt);
+    const int n = std::vsnprintf(nullptr, 0, translated, args);
+    va_end(args);
+    if (n <= 0) return std::string(translated);
+    std::string out(static_cast<std::size_t>(n), 0);
+    va_start(args, fmt);
+    std::vsnprintf(out.data(), out.size() + 1, translated, args);
+    va_end(args);
+    return out;
+}
 
 int languageIndexFromCode(const char* code) {
     if (!code || !code[0]) return -1;
