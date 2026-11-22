@@ -1,4 +1,5 @@
 #include <cstdarg>
+#include <cstdio>
 #include "i18n.h"
 #include "i18n_catalogue.h"
 
