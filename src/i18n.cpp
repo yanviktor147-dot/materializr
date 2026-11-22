@@ -9,10 +9,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include <SDL_version.h>
-#if SDL_VERSION_ATLEAST(2, 0, 14)
-#include <SDL_locale.h>
-#endif
+// No SDL here: i18n is a core layer and is built without SDL include
+// paths. The Android system-property read needs only libc.
 #if defined(__ANDROID__)
 #include <sys/system_properties.h>
 #endif
@@ -101,17 +99,6 @@ int languageIndexFromCode(const char* code) {
 }
 
 int systemLanguageIndex() {
-#if SDL_VERSION_ATLEAST(2, 0, 14)
-    // SDL asks the OS for the user's preferred locales (Android, iOS,
-    // Windows, macOS); NULL when it cannot tell.
-    if (SDL_Locale* locs = SDL_GetPreferredLocales()) {
-        int found = -1;
-        for (SDL_Locale* l = locs; found < 0 && l && l->language; ++l)
-            found = languageIndexFromCode(l->language);
-        SDL_free(locs);
-        if (found >= 0) return found;
-    }
-#endif
 #if defined(__ANDROID__)
     // Fallback for older SDL: read the system property directly. The value
     // looks like "ru-RU"; the part before '-' is what we match.
