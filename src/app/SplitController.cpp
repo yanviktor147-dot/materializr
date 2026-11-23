@@ -155,7 +155,7 @@ void SplitController::panelBody(const IopContext& ctx, bool& changed) {
             changed = true;
         }
     }
-    ImGui::TextDisabled(materializr::tr("%s halves"), axisSplitDescription(m_axis));
+    ImGui::TextDisabled(materializr::tr("%s halves"), axisSplitDescription(m_axis).c_str());
 
     ImGui::Separator();
     const float half = axisHalf();
