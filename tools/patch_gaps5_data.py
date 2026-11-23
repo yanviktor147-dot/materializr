@@ -1,0 +1,30 @@
+# -*- coding: utf-8 -*-
+RU5 = {
+"SKETCH MODE - Finish Sketch applies, Exit Sketch discards":
+    "РЕЖИМ ЭСКИЗА — «Завершить эскиз» применяет, «Выход» отменяет",
+"SKETCH MODE - Press Escape to finish": "РЕЖИМ ЭСКИЗА — Esc завершает эскиз",
+"On": "Вкл.",
+"Cancel Shape": "Отменить фигуру",
+"Sketch Linear Pattern###Sketch Linear Pattern": "Эскиз: линейный массив",
+"Sketch Circular Pattern###Sketch Circular Pattern": "Эскиз: круговой массив",
+"Restore all": "Восстановить все",
+"(controls geometry)": "(управляет геометрией)",
+"(measures only)": "(только измеряет)",
+"Drag the line to move it; drag the end dot to rotate.":
+    "Тяните линию, чтобы передвинуть её; тяните точку на конце, чтобы повернуть.",
+"(current)": "(текущая)",
+"On Line": "На линии",
+"On Circle": "На окружности",
+"On Horizontal Axis": "На горизонтальной оси",
+"On Vertical Axis": "На вертикальной оси",
+"Perpendicular": "Перпендикуляр",
+"Parallel": "Параллель",
+"Tangent": "Касательная",
+"Perpendicular from Point": "Перпендикуляр из точки",
+"Symmetry": "Симметрия",
+"Corner Bisector": "Биссектриса угла",
+"Corner Tangent": "Касательная в углу",
+"Bottom": "Снизу",
+"Left": "Слева",
+"Isometric": "Изометрия",
+}

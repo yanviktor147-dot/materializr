@@ -2641,21 +2641,21 @@ void Application::renderViewport() {
                                   m_sketchTool->getAngleSnapDeg());
                     auto kindName = [&](InferenceGuide::Kind k) -> const char* {
                         switch (k) {
-                            case InferenceGuide::Endpoint:       return "Endpoint";
-                            case InferenceGuide::Midpoint:       return "Midpoint";
-                            case InferenceGuide::OnLine:         return "On Line";
-                            case InferenceGuide::OnCircle:       return "On Circle";
-                            case InferenceGuide::AxisHFromPoint: return "On Horizontal Axis";
-                            case InferenceGuide::AxisVFromPoint: return "On Vertical Axis";
-                            case InferenceGuide::PerpToPrev:     return "Perpendicular";
-                            case InferenceGuide::ParallelToPrev: return "Parallel";
+                            case InferenceGuide::Endpoint:       return materializr::tr("Endpoint");
+                            case InferenceGuide::Midpoint:       return materializr::tr("Midpoint");
+                            case InferenceGuide::OnLine:         return materializr::tr("On Line");
+                            case InferenceGuide::OnCircle:       return materializr::tr("On Circle");
+                            case InferenceGuide::AxisHFromPoint: return materializr::tr("On Horizontal Axis");
+                            case InferenceGuide::AxisVFromPoint: return materializr::tr("On Vertical Axis");
+                            case InferenceGuide::PerpToPrev:     return materializr::tr("Perpendicular");
+                            case InferenceGuide::ParallelToPrev: return materializr::tr("Parallel");
                             case InferenceGuide::AngleSnap:      return angleLbl;
-                            case InferenceGuide::OnLineExtension: return "On Line Extension";
-                            case InferenceGuide::TangentToCircle: return "Tangent";
-                            case InferenceGuide::PerpToRef:       return "Perpendicular from Point";
-                            case InferenceGuide::Symmetry:        return "Symmetry";
-                            case InferenceGuide::CornerBisector:  return "Corner Bisector";
-                            case InferenceGuide::CornerTangent:   return "Corner Tangent";
+                            case InferenceGuide::OnLineExtension: return materializr::tr("On Line Extension");
+                            case InferenceGuide::TangentToCircle: return materializr::tr("Tangent");
+                            case InferenceGuide::PerpToRef:       return materializr::tr("Perpendicular from Point");
+                            case InferenceGuide::Symmetry:        return materializr::tr("Symmetry");
+                            case InferenceGuide::CornerBisector:  return materializr::tr("Corner Bisector");
+                            case InferenceGuide::CornerTangent:   return materializr::tr("Corner Tangent");
                         }
                         return "";
                     };
@@ -3546,8 +3546,9 @@ void Application::renderViewport() {
                                     markDirty();
                                 }
                                 ImGui::SameLine();
-                                ImGui::TextDisabled(drv ? "(controls geometry)"
-                                                        : "(measures only)");
+                                ImGui::TextDisabled("%s",
+                                    materializr::tr(drv ? "(controls geometry)"
+                                                    : "(measures only)"));
                             }
                             // "Make equal" - converts a two-entity dimension
                             // into an Equal constraint on the same pair (equal
@@ -7087,7 +7088,9 @@ void Application::renderViewport() {
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.65f, 0.25f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.75f, 0.48f, 0.12f, 1.0f));
                 }
-                bool clicked = wideButton(m_moveModeToggle ? "Move: On" : "Move: Off");
+                const std::string moveLbl = materializr::trFormat(
+                    "Move: %s", materializr::tr(m_moveModeToggle ? "On" : "Off"));
+                bool clicked = wideButton(moveLbl.c_str());
                 bool hov = ImGui::IsItemHovered();
                 if (m_moveModeToggle) ImGui::PopStyleColor(3);
                 if (clicked) m_moveModeToggle = !m_moveModeToggle;
@@ -7122,7 +7125,7 @@ void Application::renderViewport() {
                     anyBtn = true;
                     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.68f, 0.24f, 0.24f, 0.97f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.82f, 0.34f, 0.34f, 1.0f));
-                    bool del = wideButton("Delete");
+                    bool del = wideButton(materializr::tr("Delete"));
                     bool dhov = ImGui::IsItemHovered();
                     ImGui::PopStyleColor(2);
                     if (del) deleteSelectedSketchElements();
@@ -7150,7 +7153,7 @@ void Application::renderViewport() {
                         prev = true;
                         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.20f, 0.60f, 0.32f, 0.97f));
                         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.72f, 0.42f, 1.0f));
-                        bool finish = wideButton("Finish");
+                        bool finish = wideButton(materializr::tr("Finish"));
                         bool fhov = ImGui::IsItemHovered();
                         ImGui::PopStyleColor(2);
                         if (finish) recordSketchMutation([&]{ m_sketchTool->onConfirm(); });
@@ -7166,7 +7169,7 @@ void Application::renderViewport() {
                         prev = true;
                         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.78f, 0.54f, 0.18f, 0.97f));
                         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.90f, 0.64f, 0.26f, 1.0f));
-                        bool back = wideButton("Back");
+                        bool back = wideButton(materializr::tr("Back"));
                         bool bhov = ImGui::IsItemHovered();
                         ImGui::PopStyleColor(2);
                         if (back) sketchChainBack();
@@ -7177,7 +7180,8 @@ void Application::renderViewport() {
                     if (prev) ImGui::SameLine();
                     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.68f, 0.24f, 0.24f, 0.97f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.82f, 0.34f, 0.34f, 1.0f));
-                    bool cancel = wideButton(chainTool ? "Cancel" : "Cancel Shape");
+                    bool cancel = wideButton(chainTool ? materializr::tr("Cancel")
+                                        : materializr::tr("Cancel Shape"));
                     bool chov = ImGui::IsItemHovered();
                     ImGui::PopStyleColor(2);
                     if (cancel) {
@@ -7586,8 +7590,8 @@ void Application::renderViewport() {
         materializr::viewportBanner(
             ImVec4(0.2f, 1.0f, 0.4f, 1.0f),
             materializr::touchMode()
-                ? "SKETCH MODE - Finish Sketch applies, Exit Sketch discards"
-                : "SKETCH MODE - Press Escape to finish");
+                ? materializr::tr("SKETCH MODE - Finish Sketch applies, Exit Sketch discards")
+                : materializr::tr("SKETCH MODE - Press Escape to finish"));
     }
 
     // Inline dimension input while placing a sketch shape. Suppressed while

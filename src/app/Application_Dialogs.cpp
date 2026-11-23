@@ -1607,8 +1607,8 @@ void Application::renderSketchPatternPopup() {
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(280, 0), ImGuiCond_Appearing);
     const char* title = (m_sketchPatternKind == PatternKind::Linear)
-                            ? "Sketch Linear Pattern"
-                            : "Sketch Circular Pattern";
+                            ? materializr::tr("Sketch Linear Pattern###Sketch Linear Pattern")
+                            : materializr::tr("Sketch Circular Pattern###Sketch Circular Pattern");
     ImGui::Begin(title, nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
@@ -5438,9 +5438,8 @@ void Application::renderMirrorToolPanel() {
     if (ImGui::Begin(materializr::tr("Mirror###Mirror"), &open,
                      ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::TextDisabled(materializr::touchMode()
-            ? "Drag the line to move it; drag the end dot to rotate."
-            : "Drag the line to move it; drag the end dot to rotate.");
+        ImGui::TextDisabled("%s",
+            materializr::tr("Drag the line to move it; drag the end dot to rotate."));
 
         // Quick orientation presets - snap the line vertical / horizontal.
         if (ImGui::Button(materializr::tr("Vertical")))

@@ -23,13 +23,13 @@ namespace materializr {
 
 static const char* projectionDirName(ProjectionDir dir) {
     switch (dir) {
-        case ProjectionDir::Front:     return "Front";
-        case ProjectionDir::Back:      return "Back";
-        case ProjectionDir::Left:      return "Left";
-        case ProjectionDir::Right:     return "Right";
-        case ProjectionDir::Top:       return "Top";
-        case ProjectionDir::Bottom:    return "Bottom";
-        case ProjectionDir::Isometric: return "Isometric";
+        case ProjectionDir::Front:     return materializr::tr("Front");
+        case ProjectionDir::Back:      return materializr::tr("Back");
+        case ProjectionDir::Left:      return materializr::tr("Left");
+        case ProjectionDir::Right:     return materializr::tr("Right");
+        case ProjectionDir::Top:       return materializr::tr("Top");
+        case ProjectionDir::Bottom:    return materializr::tr("Bottom");
+        case ProjectionDir::Isometric: return materializr::tr("Isometric");
     }
     return "Unknown";
 }

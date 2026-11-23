@@ -7880,7 +7880,8 @@ void Application::renderProjectRecoveryPrompt() {
         if (nOrphans > 1)
             ImGui::TextDisabled(materializr::tr("%d projects in total - each reopens in its own tab."), nOrphans);
         ImGui::Spacing();
-        if (ImGui::Button(nOrphans > 1 ? "Restore all" : "Restore it",
+        if (ImGui::Button(nOrphans > 1 ? materializr::tr("Restore all")
+                                      : materializr::tr("Restore it"),
                           materializr::uiSz(140, 0))) {
             restoreProjectRecoveryNow();
             m_pendingProjectRecovery = false;

@@ -417,7 +417,7 @@ void Application::renderFileMenuItems(bool withSettings) {
         for (size_t i = 0; i < m_sessions.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
             if (ImGui::MenuItem(sessionDisplayLabel(i).c_str(),
-                                i == m_activeSession ? "(current)" : nullptr,
+                                i == m_activeSession ? materializr::tr("(current)") : nullptr,
                                 i == m_activeSession))
                 switchToSession(i);
             ImGui::PopID();

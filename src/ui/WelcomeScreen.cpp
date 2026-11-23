@@ -8,7 +8,6 @@
 #include <string>
 #include "../i18n.h"
 #include "../i18n.h"
-#include "../i18n.h"
 
 #ifndef MATERIALIZR_VERSION
 #define MATERIALIZR_VERSION "0.0.0"
@@ -36,7 +35,7 @@ WelcomeScreen::Action WelcomeScreen::render() {
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(uiSz(440, 0).x, 0.0f), ImGuiCond_Appearing);
 
-    if (ImGui::BeginPopupModal("Welcome###Welcome", &m_visible,
+    if (ImGui::BeginPopupModal(materializr::tr("Welcome###Welcome"), &m_visible,
                                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                    ImGuiWindowFlags_AlwaysAutoResize)) {
 

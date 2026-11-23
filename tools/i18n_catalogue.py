@@ -4716,6 +4716,45 @@ for _en, _ru in RU_GAPS4.items():
     else:
         CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
 
+
+# ---- Gap-fill round 5 (canvas, banners, inference labels) ----
+RU_GAPS5 = {
+    "(controls geometry)": "(управляет геометрией)",
+    "(current)": "(текущая)",
+    "(measures only)": "(только измеряет)",
+    "Bottom": "Снизу",
+    "Cancel Shape": "Отменить фигуру",
+    "Corner Bisector": "Биссектриса угла",
+    "Corner Tangent": "Касательная в углу",
+    "Drag the line to move it; drag the end dot to rotate.": "Тяните линию, чтобы передвинуть её; тяните точку на конце, чтобы повернуть.",
+    "Isometric": "Изометрия",
+    "Left": "Слева",
+    "On": "Вкл.",
+    "On Circle": "На окружности",
+    "On Horizontal Axis": "На горизонтальной оси",
+    "On Line": "На линии",
+    "On Vertical Axis": "На вертикальной оси",
+    "Parallel": "Параллель",
+    "Perpendicular": "Перпендикуляр",
+    "Perpendicular from Point": "Перпендикуляр из точки",
+    "Restore all": "Восстановить все",
+    "SKETCH MODE - Finish Sketch applies, Exit Sketch discards": "РЕЖИМ ЭСКИЗА — «Завершить эскиз» применяет, «Выход» отменяет",
+    "SKETCH MODE - Press Escape to finish": "РЕЖИМ ЭСКИЗА — Esc завершает эскиз",
+    "Sketch Circular Pattern###Sketch Circular Pattern": "Эскиз: круговой массив",
+    "Sketch Linear Pattern###Sketch Linear Pattern": "Эскиз: линейный массив",
+    "Symmetry": "Симметрия",
+    "Tangent": "Касательная",
+}
+
+for _en, _ru in RU_GAPS5.items():
+    for _entry in CAT:
+        if _entry[0] == _en:
+            if not _entry[1].get("ru"):
+                _entry[1]["ru"] = _ru
+            break
+    else:
+        CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
+
 def cstr(s):
     """C string literal with non-ASCII as explicit \\xNN UTF-8 bytes.
 
