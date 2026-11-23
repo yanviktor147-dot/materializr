@@ -349,9 +349,11 @@ void renderTutorial(materializr::PluginContext&) {
             g_open = true;
             g_onPicker = true;
             g_step = 0;
-            // Only ASK when the user has never chosen. Someone who already set
-            // a language (or reopens the tour later) goes straight to layout.
-            g_onLanguage = (materializr::currentLanguageIndex() < 0);
+            // Always ask on the very first run: system detection can be wrong
+            // or fall back to English, so the user confirms the language with
+            // one tap - the system guess stays pre-highlighted. Reopening the
+            // tour later still goes straight to the layout step.
+            g_onLanguage = true;
         }
     }
     if (!g_open) return;
