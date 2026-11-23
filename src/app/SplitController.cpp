@@ -40,10 +40,10 @@ constexpr float kOverhang = 1.18f;
 const char* axisName(int a) { return a == 0 ? "X" : a == 1 ? "Y" : "Z"; }
 
 // What the two halves are called, in the axis labels the user thinks in.
-const char* axisSplitDescription(int a) {
-    return a == 0 ? "left / right"
-         : a == 1 ? "front / back"
-                  : "top / bottom";
+std::string axisSplitDescription(int a) {
+    return a == 0 ? materializr::tr("left / right")
+         : a == 1 ? materializr::tr("front / back")
+                  : materializr::tr("top / bottom");
 }
 
 } // namespace

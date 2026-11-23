@@ -1811,7 +1811,10 @@ void Application::renderPatternPanel() {
         ImGui::TextColored(materializr::accentText(), "%s", materializr::tr("Rotation axis"));
         std::vector<int> axisIds = m_document->getAllAxisIds();
         std::string current;
-        const char* userLabels[3] = {"X (user)", "Y (user)", "Z (user, floor-up)"};
+        const std::string userLabelsTr[3] = {materializr::tr("X (user)"), materializr::tr("Y (user)"),
+                                    materializr::tr("Z (user, floor-up)")};
+const char* userLabels[3] = {userLabelsTr[0].c_str(), userLabelsTr[1].c_str(),
+                             userLabelsTr[2].c_str()};
         if (m_patternAxisId >= 0) {
             current = m_document->getAxisName(m_patternAxisId) +
                       " (id " + std::to_string(m_patternAxisId) + ")";
@@ -5609,7 +5612,7 @@ void Application::renderPrimitivePopup() {
                ImGui::GetWindowPos().y + 50),
         ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(260, 0), ImGuiCond_Appearing);
-    ImGui::Begin(titles[k], nullptr,
+    ImGui::Begin(materializr::tr(titles[k]).c_str(), nullptr,
                  ImGuiWindowFlags_NoResize |
                  ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_AlwaysAutoResize);
@@ -5625,25 +5628,25 @@ void Application::renderPrimitivePopup() {
     };
     switch (k) {
     case 0: // Box
-        dimField("Width (X)",  &m_primitivePopupExtents[0]);
-        dimField("Depth (Y)",  &m_primitivePopupExtents[1]);
-        dimField("Height (Z)", &m_primitivePopupExtents[2]);
+        dimField(materializr::tr("Width (X)").c_str(),  &m_primitivePopupExtents[0]);
+        dimField(materializr::tr("Depth (Y)").c_str(),  &m_primitivePopupExtents[1]);
+        dimField(materializr::tr("Height (Z)").c_str(), &m_primitivePopupExtents[2]);
         break;
     case 1: // Cylinder
-        dimField("Radius", &m_primitivePopupRadius);
-        dimField("Height", &m_primitivePopupHeight);
+        dimField(materializr::tr("Radius").c_str(), &m_primitivePopupRadius);
+        dimField(materializr::tr("Height").c_str(), &m_primitivePopupHeight);
         break;
     case 2: // Sphere
-        dimField("Radius", &m_primitivePopupRadius);
+        dimField(materializr::tr("Radius").c_str(), &m_primitivePopupRadius);
         break;
     case 3: // Cone
-        dimField("Bottom radius", &m_primitivePopupRadius);
-        dimField("Top radius",    &m_primitivePopupTopRadius);
-        dimField("Height",        &m_primitivePopupHeight);
+        dimField(materializr::tr("Bottom radius").c_str(), &m_primitivePopupRadius);
+        dimField(materializr::tr("Top radius").c_str(),    &m_primitivePopupTopRadius);
+        dimField(materializr::tr("Height").c_str(),        &m_primitivePopupHeight);
         break;
     case 4: // Torus
-        dimField("Major radius",  &m_primitivePopupRadius);
-        dimField("Minor radius",  &m_primitivePopupMinorRadius);
+        dimField(materializr::tr("Major radius").c_str(),  &m_primitivePopupRadius);
+        dimField(materializr::tr("Minor radius").c_str(),  &m_primitivePopupMinorRadius);
         ImGui::TextDisabled("%s", materializr::tr("Major must exceed minor - equal radii are a degenerate self-touching torus."));
         break;
     }

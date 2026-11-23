@@ -5170,25 +5170,25 @@ void Application::requestClose() {
 
 void Application::renderSavePrompt() {
     if (m_showSavePrompt) {
-        ImGui::OpenPopup("Unsaved Changes");
+        ImGui::OpenPopup(materializr::tr("Unsaved Changes"));
         m_showSavePrompt = false; // OpenPopup latches; only call once per request
     }
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        const char* prompt;
+    if (ImGui::BeginPopupModal(materializr::tr("Unsaved Changes").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        std::string prompt;
         switch (m_postSaveAction) {
             case PostSaveAction::CloseProject:
-                prompt = "You have unsaved changes. Save before closing the project?"; break;
+                prompt = materializr::tr("You have unsaved changes. Save before closing the project?"); break;
             case PostSaveAction::OpenProject:
                 prompt = m_pendingActionClosesTab
-                    ? "You have unsaved changes. Save before closing this tab?"
-                    : "You have unsaved changes. Save before opening another project?";
+                    ? materializr::tr("You have unsaved changes. Save before closing this tab?")
+                    : materializr::tr("You have unsaved changes. Save before opening another project?");
                 break;
             default:
-                prompt = "You have unsaved changes. Save before exiting?"; break;
+                prompt = materializr::tr("You have unsaved changes. Save before exiting?"); break;
         }
-        ImGui::Text("%s", prompt);
+        ImGui::Text("%s", prompt.c_str());
         ImGui::Separator();
         if (ImGui::Button(materializr::tr("Save"), materializr::uiSz(100, 0))) {
             m_closeAfterSave = true;

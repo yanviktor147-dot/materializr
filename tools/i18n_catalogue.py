@@ -4755,6 +4755,53 @@ for _en, _ru in RU_GAPS5.items():
     else:
         CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
 
+
+# ---- Gap-fill round 6 (dialogs, view cube, counters) ----
+RU_GAPS6 = {
+    "Arrows: Move | Rings: Rotate | Cubes: Scale": "Стрелки: перемещение | Кольца: вращение | Кубы: масштаб",
+    "Bodies: %d": "Тел: %d",
+    "Bottom radius": "Нижний радиус",
+    "Circular Pattern": "Круговой массив",
+    "Create": "Создать",
+    "Depth (Y)": "Глубина (Y)",
+    "Height": "Высота",
+    "Height (Z)": "Высота (Z)",
+    "Linear Pattern": "Линейный массив",
+    "Major radius": "Большой радиус",
+    "Minor radius": "Малый радиус",
+    "New Box": "Новый бокс",
+    "New Cone": "Новый конус",
+    "New Cylinder": "Новый цилиндр",
+    "New Sphere": "Новый шар",
+    "New Torus": "Новый тор",
+    "Radius": "Радиус",
+    "Revolve": "Вращение",
+    "Split Body": "Разделить тело",
+    "Tools": "Инструменты",
+    "Top radius": "Верхний радиус",
+    "Unsaved Changes": "Несохранённые изменения",
+    "Width (X)": "Ширина (X)",
+    "X (user)": "X (польз.)",
+    "Y (user)": "Y (польз.)",
+    "You have unsaved changes. Save before closing the project?": "Есть несохранённые изменения. Сохранить перед закрытием проекта?",
+    "You have unsaved changes. Save before closing this tab?": "Есть несохранённые изменения. Сохранить перед закрытием вкладки?",
+    "You have unsaved changes. Save before exiting?": "Есть несохранённые изменения. Сохранить перед выходом?",
+    "You have unsaved changes. Save before opening another project?": "Есть несохранённые изменения. Сохранить перед открытием другого проекта?",
+    "Z (user, floor-up)": "Z (польз., вверх от пола)",
+    "front / back": "спереди / сзади",
+    "left / right": "слева / справа",
+    "top / bottom": "сверху / снизу",
+}
+
+for _en, _ru in RU_GAPS6.items():
+    for _entry in CAT:
+        if _entry[0] == _en:
+            if not _entry[1].get("ru"):
+                _entry[1]["ru"] = _ru
+            break
+    else:
+        CAT.append((_en, {"es":"", "pt":"", "fr":"", "de":"", "it":"", "ru":_ru}))
+
 def cstr(s):
     """C string literal with non-ASCII as explicit \\xNN UTF-8 bytes.
 

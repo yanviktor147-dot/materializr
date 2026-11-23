@@ -108,7 +108,7 @@ int VersionPanel::render() {
                 ImGui::Text(materializr::tr("Date: %s"), timeBuf);
 
                 char bodiesBuf[64];
-                std::snprintf(bodiesBuf, sizeof(bodiesBuf), "Bodies: %d", entry.bodyCount);
+                std::snprintf(bodiesBuf, sizeof(bodiesBuf), materializr::tr("Bodies: %d").c_str(), entry.bodyCount);
                 ImGui::Text("%s", bodiesBuf);
 
                 if (ImGui::Button(materializr::tr("Restore"), ImVec2(-1, 0))) {

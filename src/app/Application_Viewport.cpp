@@ -7560,7 +7560,7 @@ void Application::renderViewport() {
     // Gizmo hint
     if (m_gizmo->isVisible()) {
         materializr::viewportBanner(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                                    "Arrows: Move | Rings: Rotate | Cubes: Scale");
+                                    materializr::tr("Arrows: Move | Rings: Rotate | Cubes: Scale"));
     }
 
     // Interactive extrude UI - banner + distance well live in the
