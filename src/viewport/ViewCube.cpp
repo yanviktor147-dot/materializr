@@ -220,9 +220,9 @@ ViewCubeAction ViewCube::render(Camera& camera, bool invertDrag, bool lightMode,
         // Label centred on the face.
         ImVec2 ctr((q[0].x + q[1].x + q[2].x + q[3].x) * 0.25f,
                    (q[0].y + q[1].y + q[2].y + q[3].y) * 0.25f);
-        ImVec2 ts = ImGui::CalcTextSize(materializr::tr(f.label).c_str());
+        ImVec2 ts = ImGui::CalcTextSize(materializr::tr(f.label));
         dl->AddText(ImVec2(ctr.x - ts.x * 0.5f, ctr.y - ts.y * 0.5f),
-                    ink(255), materializr::tr(f.label).c_str());
+                    ink(255), materializr::tr(f.label));
 
         // Press on a face arms a pending snap; the actual snap fires on RELEASE
         // (and only if the user didn't drag in between, so dragging the cube

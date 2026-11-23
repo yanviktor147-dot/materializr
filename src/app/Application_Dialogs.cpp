@@ -5612,7 +5612,7 @@ void Application::renderPrimitivePopup() {
                ImGui::GetWindowPos().y + 50),
         ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(uiSz(260, 0), ImGuiCond_Appearing);
-    ImGui::Begin(materializr::tr(titles[k]).c_str(), nullptr,
+    ImGui::Begin(materializr::tr(titles[k]), nullptr,
                  ImGuiWindowFlags_NoResize |
                  ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_AlwaysAutoResize);
@@ -5628,25 +5628,25 @@ void Application::renderPrimitivePopup() {
     };
     switch (k) {
     case 0: // Box
-        dimField(materializr::tr("Width (X)").c_str(),  &m_primitivePopupExtents[0]);
-        dimField(materializr::tr("Depth (Y)").c_str(),  &m_primitivePopupExtents[1]);
-        dimField(materializr::tr("Height (Z)").c_str(), &m_primitivePopupExtents[2]);
+        dimField(materializr::tr("Width (X)"),  &m_primitivePopupExtents[0]);
+        dimField(materializr::tr("Depth (Y)"),  &m_primitivePopupExtents[1]);
+        dimField(materializr::tr("Height (Z)"), &m_primitivePopupExtents[2]);
         break;
     case 1: // Cylinder
-        dimField(materializr::tr("Radius").c_str(), &m_primitivePopupRadius);
-        dimField(materializr::tr("Height").c_str(), &m_primitivePopupHeight);
+        dimField(materializr::tr("Radius"), &m_primitivePopupRadius);
+        dimField(materializr::tr("Height"), &m_primitivePopupHeight);
         break;
     case 2: // Sphere
-        dimField(materializr::tr("Radius").c_str(), &m_primitivePopupRadius);
+        dimField(materializr::tr("Radius"), &m_primitivePopupRadius);
         break;
     case 3: // Cone
-        dimField(materializr::tr("Bottom radius").c_str(), &m_primitivePopupRadius);
-        dimField(materializr::tr("Top radius").c_str(),    &m_primitivePopupTopRadius);
-        dimField(materializr::tr("Height").c_str(),        &m_primitivePopupHeight);
+        dimField(materializr::tr("Bottom radius"), &m_primitivePopupRadius);
+        dimField(materializr::tr("Top radius"),    &m_primitivePopupTopRadius);
+        dimField(materializr::tr("Height"),        &m_primitivePopupHeight);
         break;
     case 4: // Torus
-        dimField(materializr::tr("Major radius").c_str(),  &m_primitivePopupRadius);
-        dimField(materializr::tr("Minor radius").c_str(),  &m_primitivePopupMinorRadius);
+        dimField(materializr::tr("Major radius"),  &m_primitivePopupRadius);
+        dimField(materializr::tr("Minor radius"),  &m_primitivePopupMinorRadius);
         ImGui::TextDisabled("%s", materializr::tr("Major must exceed minor - equal radii are a degenerate self-touching torus."));
         break;
     }

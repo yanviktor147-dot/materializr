@@ -74,7 +74,7 @@ ToolAction Toolbar::render() {
     // header for why classic reads it at all.
     m_catalog = railTools();
 
-    ImGui::Begin(materializr::tr("Tools").c_str(), nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin(materializr::tr("Tools"), nullptr, ImGuiWindowFlags_NoCollapse);
 
     if (m_sketchMode) {
         action = renderSketchTools();

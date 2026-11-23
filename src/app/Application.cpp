@@ -5175,7 +5175,7 @@ void Application::renderSavePrompt() {
     }
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    if (ImGui::BeginPopupModal(materializr::tr("Unsaved Changes").c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal(materializr::tr("Unsaved Changes"), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         std::string prompt;
         switch (m_postSaveAction) {
             case PostSaveAction::CloseProject:

@@ -732,7 +732,7 @@ bool ItemsPanel::renderContent() {
     // Bottom: counts
     ImGui::Separator();
     char countText[128];
-    std::snprintf(countText, sizeof(countText), materializr::tr("Bodies: %d").c_str(), m_document->bodyCount());
+    std::snprintf(countText, sizeof(countText), materializr::tr("Bodies: %d"), m_document->bodyCount());
     ImGui::Text("%s", countText);
 
     // Remember which body / sketch is the primary selection so the next frame
